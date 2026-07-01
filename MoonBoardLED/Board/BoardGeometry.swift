@@ -53,24 +53,7 @@ enum BoardGeometry {
         return columnLabels[col]
     }
 
-    // MARK: - Background image layout
-    //
-    // The "BoardBackground" asset is the official Mini 2025 setup photo (720×761).
-    // Holds sit on a regular grid, so each hold center is a linear function of its
-    // column/row. These fractions (0...1 of the image) place the tappable markers on
-    // top of the real holds. If a marker looks off, nudge these four numbers.
-
-    /// Native aspect ratio of the board photo (width / height).
-    static let imageAspect: CGFloat = 1024.0 / 1024.0
-
-    static let firstColXFrac: CGFloat = 0.146   // center of column A
-    static let colStepXFrac: CGFloat  = 0.076   // spacing between columns
-    static let topRowYFrac: CGFloat   = 0.093   // center of row 12 (top)
-    static let rowStepYFrac: CGFloat  = 0.0752  // spacing between rows
-
-    /// Horizontal fraction (0...1) of the hold center for a column.
-    static func normX(col: Int) -> CGFloat { firstColXFrac + CGFloat(col) * colStepXFrac }
-
-    /// Vertical fraction (0...1) of the hold center for a row (row 1 = bottom).
-    static func normY(row: Int) -> CGFloat { topRowYFrac + CGFloat(rows - row) * rowStepYFrac }
+    // Board-art layout (image aspect + hold-center placement) now lives in
+    // `MoonBoardGeometry`, which `BoardImageView` uses for every setup. This enum
+    // is only the LED serpentine mapping the firmware needs.
 }

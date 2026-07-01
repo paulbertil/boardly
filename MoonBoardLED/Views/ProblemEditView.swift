@@ -47,7 +47,7 @@ struct ProblemEditView: View {
                 }
                 .frame(maxHeight: 300)
 
-                BoardGridView(holds: holds, onTap: tapHold, showBeta: showBeta)
+                BoardImageView(setup: .mini2025, holds: holds, showBeta: showBeta, onTap: tapHold)
                     .padding(.horizontal, 8)
                     .padding(.bottom, 8)
             }

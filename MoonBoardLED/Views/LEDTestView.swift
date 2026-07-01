@@ -25,7 +25,7 @@ struct LEDTestView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                BoardGridView(holds: [], highlight: expected)
+                BoardImageView(setup: .mini2025, highlight: expected)
                     .frame(maxHeight: 360)
                     .padding(.horizontal, 8)
 
