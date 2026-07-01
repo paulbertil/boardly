@@ -126,27 +126,28 @@ final class MoonBoardBLEManager: NSObject, ObservableObject {
 
     /// Build the firmware message string for a set of holds. With beta off, the
     /// left/right/match roles all light blue (right).
-    static func message(for holds: [HoldAssignment], flipped: Bool, showBeta: Bool) -> String {
+    static func message(for holds: [HoldAssignment], rows: Int, flipped: Bool, showBeta: Bool) -> String {
         let tokens = holds.map { h -> String in
-            let led = BoardGeometry.ledIndex(col: h.col, row: h.row, flipped: flipped)
+            let led = BoardGeometry.ledIndex(col: h.col, row: h.row, rows: rows, flipped: flipped)
             return "\(h.type.displayed(showBeta: showBeta).protocolLetter)\(led)"
         }
         return "l#" + tokens.joined(separator: ",") + "#"
     }
 
     /// Send a problem to the board, debounced (use for live preview while editing).
-    func sendDebounced(holds: [HoldAssignment], flipped: Bool, showBeta: Bool) {
+    /// `rows` is the board's row count (Mini 12, full 18) for the LED mapping.
+    func sendDebounced(holds: [HoldAssignment], rows: Int, flipped: Bool, showBeta: Bool) {
         debounceWorkItem?.cancel()
-        let msg = Self.message(for: holds, flipped: flipped, showBeta: showBeta)
+        let msg = Self.message(for: holds, rows: rows, flipped: flipped, showBeta: showBeta)
         let work = DispatchWorkItem { [weak self] in self?.write(msg) }
         debounceWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + debounceInterval, execute: work)
     }
 
     /// Send immediately (use for the explicit "Light up on board" button).
-    func send(holds: [HoldAssignment], flipped: Bool, showBeta: Bool) {
+    func send(holds: [HoldAssignment], rows: Int, flipped: Bool, showBeta: Bool) {
         debounceWorkItem?.cancel()
-        write(Self.message(for: holds, flipped: flipped, showBeta: showBeta))
+        write(Self.message(for: holds, rows: rows, flipped: flipped, showBeta: showBeta))
     }
 
     /// Turn all LEDs off (empty problem string).
