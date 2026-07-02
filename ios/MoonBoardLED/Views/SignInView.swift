@@ -111,10 +111,13 @@ struct SignInView: View {
                     Button("Cancel") { dismiss() }
                 }
             }
-            // Closing on a successful sign-in (and swapping to profile setup for a
-            // brand-new account) is driven by SettingsView, the single owner of this
-            // sheet's lifecycle — so there's exactly one writer of its presentation
-            // state and no swap/dismiss race.
+            // Once a session lands (code verified or Google), close the sheet. What
+            // happens next is Settings' job: for a brand-new account it hands off to
+            // profile setup in its sheet's `onDismiss`, once this one has fully torn
+            // down — so the two sheets never try to present at the same time.
+            .onChange(of: auth.status) { _, newValue in
+                if newValue != .signedOut { dismiss() }
+            }
         }
     }
 
@@ -137,8 +140,8 @@ struct SignInView: View {
         defer { isWorking = false }
         do {
             try await auth.verifyEmailCode(email: email, code: code)
-            // Success advances auth.status; SettingsView reacts to that transition and
-            // closes this sheet (swapping to profile setup for a new account).
+            // Success advances auth.status; the onChange below closes this sheet, and
+            // Settings then hands off to profile setup for a new account.
         } catch {
             errorMessage = "That code didn't work. Check it and try again, or request a new one."
         }

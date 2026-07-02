@@ -11,6 +11,9 @@ struct SettingsView: View {
     @AppStorage("showClimbPreviews") private var showClimbPreviews = true
 
     @State private var activeSheet: SettingsSheet?
+    /// The sheet currently on screen, recorded when it's presented (not when it's
+    /// dismissed) so the dismiss handler can tell *which* sheet just closed.
+    @State private var presentedSheet: SettingsSheet?
 
     var body: some View {
         NavigationStack {
@@ -69,32 +72,37 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             // Single presentation slot for everything raised from this tab's
             // NavigationStack. Two `.sheet` modifiers sharing one presenting
-            // controller collide in SwiftUI ("already presenting" → the sheet
-            // dismisses itself the instant it opens), so connection, sign-in, and
-            // profile-setup all flow through this one modifier.
-            .sheet(item: $activeSheet) { sheet in
+            // controller contend for its one presentation slot and lose the race on
+            // first activation ("already presenting" → the sheet dismisses itself the
+            // instant it opens — once per launch, and again after logout rebuilds this
+            // subtree). Routing connection, sign-in, and profile-setup through a single
+            // modifier removes the second presenter entirely.
+            //
+            // The new-account hand-off (sign-in → profile setup) runs in `onDismiss`,
+            // i.e. only *after* the sign-in sheet has fully torn down — presenting the
+            // next sheet while the previous one is still up is that same "already
+            // presenting" race. `presentedSheet` records what was on screen so
+            // dismissing profile setup itself ("Not now") doesn't reopen it.
+            .sheet(item: $activeSheet, onDismiss: chainAfterDismiss) { sheet in
                 switch sheet {
                 case .connection: ConnectionView()
                 case .signIn: SignInView()
                 case .profileSetup: ProfileSetupView()
                 }
             }
-            // Auth-status transitions drive the sheet from here rather than from
-            // each presented view, so there's always exactly one writer of
-            // `activeSheet`. Raising profile setup on the *transition* into the
-            // no-profile state (not continuously) keeps "Not now" dismissible; a
-            // completed profile or a sign-out closes whatever is open.
-            .onChange(of: auth.status) { _, newValue in
-                switch newValue {
-                case .signedInNoProfile:
-                    activeSheet = .profileSetup
-                case .signedInWithProfile:
-                    activeSheet = nil
-                case .signedOut:
-                    break
-                }
+            .onChange(of: activeSheet) { _, newValue in
+                if let newValue { presentedSheet = newValue }
             }
         }
+    }
+
+    /// After the sign-in sheet closes on a brand-new account (no profile yet), hand off
+    /// to profile setup. Gated on the *sign-in* sheet having been the one dismissed, so
+    /// a returning user (who lands in `.signedInWithProfile`) just closes the sheet, and
+    /// "Not now" on profile setup doesn't immediately reopen it.
+    private func chainAfterDismiss() {
+        guard presentedSheet == .signIn, auth.status == .signedInNoProfile else { return }
+        activeSheet = .profileSetup
     }
 }
 
@@ -134,8 +142,8 @@ private struct AccountSection: View {
             if auth.isRestoring {
                 // Session restore runs async on launch. Until it resolves, don't offer
                 // "Sign in" — otherwise a user with a saved session taps it and the sheet
-                // slams shut the instant the restored session lands (SettingsView closes
-                // it on the transition to a non-signedOut status).
+                // slams shut the instant the restored session lands (SignInView's
+                // auto-dismiss on a non-signedOut status).
                 HStack {
                     Text("Checking sign-in…").foregroundStyle(.secondary)
                     Spacer()
