@@ -72,7 +72,7 @@ struct ProblemListView: View {
     private func row(for problem: Problem) -> some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(problem.name).font(.headline)
+                Text(problem.name.uppercased()).font(.headline)
                 Text("\(problem.holds.count) holds").font(.caption).foregroundStyle(.secondary)
             }
             Spacer()

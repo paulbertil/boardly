@@ -89,7 +89,7 @@ struct ProblemDetailView: View {
                            boardLayoutId: board.id,
                            onComplete: { pendingTries = 0 })
         }
-        .navigationTitle(problem.name)
+        .navigationTitle(problem.name.uppercased())
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

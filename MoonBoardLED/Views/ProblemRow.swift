@@ -32,18 +32,20 @@ struct ProblemRow<Trailing: View>: View {
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
-                        Text(name).font(.headline)
-                        if isBenchmark {
-                            Image(systemName: "checkmark.seal.fill")
-                                .font(.caption).foregroundStyle(.orange)
-                        }
-                        if isSent {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.caption).foregroundStyle(.green)
-                        }
-                        if isFavorite {
-                            Image(systemName: "heart.fill")
-                                .font(.caption).foregroundStyle(.pink)
+                        Text(name.uppercased()).font(.headline)
+                        HStack(spacing: 3) {
+                            if isBenchmark {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .font(.caption).foregroundStyle(.orange)
+                            }
+                            if isSent {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.caption).foregroundStyle(.green)
+                            }
+                            if isFavorite {
+                                Image(systemName: "heart.fill")
+                                    .font(.caption).foregroundStyle(.pink)
+                            }
                         }
                     }
                     if let meta {
