@@ -3,7 +3,6 @@ import SwiftUI
 /// App shell: a bottom tab bar with Home (boards + logbook), Settings, and Search
 /// (the active board's catalog browser). Search is outermost right.
 struct RootTabView: View {
-    @EnvironmentObject private var auth: AuthManager
     @AppStorage("appAppearance") private var appearance: AppAppearance = .system
     /// The board Search browses and Home marks active. Defaults to the Mini 2025
     /// (the physical board). Home writes it; Search reads it.
@@ -12,10 +11,6 @@ struct RootTabView: View {
     /// Session-only selected tab. Held in a router so other screens (Home) can
     /// switch tabs — e.g. tapping a board jumps to Search.
     @State private var router = TabRouter()
-    /// Presents the first-run profile setup once, when the user first lands in the
-    /// signed-in-but-no-profile state. Dismissible ("Not now") so it never traps the
-    /// otherwise-usable app; it re-presents on future social surfaces (later plans).
-    @State private var showingProfileSetup = false
 
     /// The board Search browses: the active board if it's still added, otherwise the
     /// first added board. `nil` when no boards have been added yet.
@@ -77,14 +72,10 @@ struct RootTabView: View {
         }
         .environment(router)
         .preferredColorScheme(appearance.colorScheme)
-        .sheet(isPresented: $showingProfileSetup) {
-            ProfileSetupView()
-        }
-        // Raise profile setup on the transition *into* the no-profile state (e.g. right
-        // after a first sign-in), not continuously — so "Not now" actually dismisses.
-        .onChange(of: auth.status) { _, newValue in
-            if newValue == .signedInNoProfile { showingProfileSetup = true }
-        }
+        // First-run profile setup is presented by SettingsView, the single owner of
+        // the sign-in → profile-setup flow. Presenting it here as well raced with that
+        // sheet (both targeting the same presenting controller during the sign-in
+        // transition), so it lives in exactly one place now.
     }
 }
 

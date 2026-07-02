@@ -111,10 +111,10 @@ struct SignInView: View {
                     Button("Cancel") { dismiss() }
                 }
             }
-            // Once a session lands (code verified or Google), close the sheet.
-            .onChange(of: auth.status) { _, newValue in
-                if newValue != .signedOut { dismiss() }
-            }
+            // Closing on a successful sign-in (and swapping to profile setup for a
+            // brand-new account) is driven by SettingsView, the single owner of this
+            // sheet's lifecycle — so there's exactly one writer of its presentation
+            // state and no swap/dismiss race.
         }
     }
 
@@ -137,7 +137,8 @@ struct SignInView: View {
         defer { isWorking = false }
         do {
             try await auth.verifyEmailCode(email: email, code: code)
-            // Success advances auth.status; the onChange above dismisses the sheet.
+            // Success advances auth.status; SettingsView reacts to that transition and
+            // closes this sheet (swapping to profile setup for a new account).
         } catch {
             errorMessage = "That code didn't work. Check it and try again, or request a new one."
         }

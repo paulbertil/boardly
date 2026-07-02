@@ -10,12 +10,12 @@ struct SettingsView: View {
     @AppStorage("autoLightOnSwipe") private var autoLightOnSwipe = false
     @AppStorage("showClimbPreviews") private var showClimbPreviews = true
 
-    @State private var showingConnection = false
+    @State private var activeSheet: SettingsSheet?
 
     var body: some View {
         NavigationStack {
             Form {
-                AccountSection()
+                AccountSection(activeSheet: $activeSheet)
 
                 Section("Display") {
                     Picker("Appearance", selection: $appearance) {
@@ -38,7 +38,7 @@ struct SettingsView: View {
                 Section {
                     // The LED link is global (not per-board). Tapping opens the
                     // scan/connect sheet, which hosts calibration when connected.
-                    Button { showingConnection = true } label: {
+                    Button { activeSheet = .connection } label: {
                         HStack {
                             Text("LED")
                                 .foregroundStyle(.primary)
@@ -67,11 +67,43 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
-            .sheet(isPresented: $showingConnection) {
-                ConnectionView()
+            // Single presentation slot for everything raised from this tab's
+            // NavigationStack. Two `.sheet` modifiers sharing one presenting
+            // controller collide in SwiftUI ("already presenting" → the sheet
+            // dismisses itself the instant it opens), so connection, sign-in, and
+            // profile-setup all flow through this one modifier.
+            .sheet(item: $activeSheet) { sheet in
+                switch sheet {
+                case .connection: ConnectionView()
+                case .signIn: SignInView()
+                case .profileSetup: ProfileSetupView()
+                }
+            }
+            // Auth-status transitions drive the sheet from here rather than from
+            // each presented view, so there's always exactly one writer of
+            // `activeSheet`. Raising profile setup on the *transition* into the
+            // no-profile state (not continuously) keeps "Not now" dismissible; a
+            // completed profile or a sign-out closes whatever is open.
+            .onChange(of: auth.status) { _, newValue in
+                switch newValue {
+                case .signedInNoProfile:
+                    activeSheet = .profileSetup
+                case .signedInWithProfile:
+                    activeSheet = nil
+                case .signedOut:
+                    break
+                }
             }
         }
     }
+}
+
+/// The one sheet a Settings screen can present at a time. Owned by `SettingsView`
+/// so the connection, sign-in, and profile-setup flows never stack two `.sheet`
+/// modifiers on the same NavigationStack.
+enum SettingsSheet: Identifiable {
+    case connection, signIn, profileSetup
+    var id: Self { self }
 }
 
 /// The Account section of Settings. Signed-out shows a sign-in entry; signed-in shows
@@ -80,19 +112,13 @@ struct SettingsView: View {
 /// the app works signed-out.
 private struct AccountSection: View {
     @EnvironmentObject private var auth: AuthManager
-    @State private var activeSheet: AccountSheet?
+    /// The Settings-wide sheet slot, owned by `SettingsView`. The account buttons
+    /// set it; a single `.sheet(item:)` up there does the presenting.
+    @Binding var activeSheet: SettingsSheet?
     @State private var confirmingSignOut = false
     @State private var confirmingDelete = false
     @State private var isDeleting = false
     @State private var actionError: String?
-
-    /// One sheet slot for the whole section. Two separate `.sheet(isPresented:)`
-    /// modifiers on one view conflict in SwiftUI ("already presenting" → the sheet
-    /// dismisses itself the moment it opens); a single `.sheet(item:)` avoids that.
-    private enum AccountSheet: Identifiable {
-        case signIn, profileSetup
-        var id: Self { self }
-    }
 
     var body: some View {
         // No backend configured in this build → no auth entry point at all. The rest
@@ -108,8 +134,8 @@ private struct AccountSection: View {
             if auth.isRestoring {
                 // Session restore runs async on launch. Until it resolves, don't offer
                 // "Sign in" — otherwise a user with a saved session taps it and the sheet
-                // slams shut the instant the restored session lands (SignInView's
-                // auto-dismiss on a non-signedOut status).
+                // slams shut the instant the restored session lands (SettingsView closes
+                // it on the transition to a non-signedOut status).
                 HStack {
                     Text("Checking sign-in…").foregroundStyle(.secondary)
                     Spacer()
@@ -168,12 +194,6 @@ private struct AccountSection: View {
         } footer: {
             if let actionError {
                 Text(actionError).foregroundStyle(.red)
-            }
-        }
-        .sheet(item: $activeSheet) { sheet in
-            switch sheet {
-            case .signIn: SignInView()
-            case .profileSetup: ProfileSetupView()
             }
         }
         .confirmationDialog("Sign out?", isPresented: $confirmingSignOut, titleVisibility: .visible) {
