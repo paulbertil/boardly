@@ -4,6 +4,8 @@ import SwiftUI
 struct ConnectionView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var ble: MoonBoardBLEManager
+    /// Presents the calibration screen full-screen (only offered when connected).
+    @State private var showingTest = false
 
     var body: some View {
         NavigationStack {
@@ -17,6 +19,14 @@ struct ConnectionView: View {
                         if ble.isConnected {
                             Button("Disconnect", role: .destructive) { ble.disconnect() }
                                 .font(.caption)
+                        }
+                    }
+
+                    // Calibration only makes sense with a live link, so surface it
+                    // here (below the divider) once connected rather than in Settings.
+                    if ble.isConnected {
+                        Button { showingTest = true } label: {
+                            Text("LED Test / Calibration")
                         }
                     }
                 }
@@ -52,6 +62,9 @@ struct ConnectionView: View {
             }
             .onAppear { ble.startScan() }
             .onDisappear { ble.stopScan() }
+            .fullScreenCover(isPresented: $showingTest) {
+                LEDTestView()
+            }
         }
     }
 }

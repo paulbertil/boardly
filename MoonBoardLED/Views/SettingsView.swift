@@ -10,7 +10,7 @@ struct SettingsView: View {
     @AppStorage("autoLightOnSwipe") private var autoLightOnSwipe = false
     @AppStorage("showClimbPreviews") private var showClimbPreviews = true
 
-    @State private var showingTest = false
+    @State private var showingConnection = false
 
     var body: some View {
         NavigationStack {
@@ -30,19 +30,40 @@ struct SettingsView: View {
                     Text("When browsing problems, automatically light each one on the board as you swipe to it.")
                 }
 
-                Section("Board") {
-                    Button { showingTest = true } label: {
-                        Label("LED Test / Calibration", systemImage: "lightbulb")
+                Section {
+                    // The LED link is global (not per-board). Tapping opens the
+                    // scan/connect sheet, which hosts calibration when connected.
+                    Button { showingConnection = true } label: {
+                        HStack {
+                            Text("LED")
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            VStack(alignment: .trailing, spacing: 2) {
+                                HStack(spacing: 6) {
+                                    Circle()
+                                        .fill(ble.isConnected ? Color.blue : Color.gray)
+                                        .frame(width: 8, height: 8)
+                                    Text(ble.isConnected ? "Connected" : "Not connected")
+                                        .font(.caption)
+                                        .foregroundStyle(ble.isConnected ? Color.blue : Color.secondary)
+                                }
+                                if ble.isConnected, let name = ble.connectedName {
+                                    // Explicit gray, not a hierarchical style: inside a
+                                    // tinted Button the latter picks up the accent (blue).
+                                    Text(name)
+                                        .font(.caption2)
+                                        .foregroundStyle(Color.secondary)
+                                }
+                            }
+                        }
                     }
-                    Button { ble.clear() } label: {
-                        Label("Clear Board", systemImage: "lightbulb.slash")
-                    }
-                    .disabled(!ble.isConnected)
+                } header: {
+                    Text("Board")
                 }
             }
             .navigationTitle("Settings")
-            .sheet(isPresented: $showingTest) {
-                LEDTestView()
+            .sheet(isPresented: $showingConnection) {
+                ConnectionView()
             }
         }
     }
