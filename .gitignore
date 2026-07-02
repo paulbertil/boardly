@@ -15,3 +15,6 @@ xcuserdata/
 .build/
 Packages/
 Package.resolved
+
+# Supabase credentials — real config is local-only; commit only the *.example.
+ios/MoonBoardLED/Supabase.xcconfig

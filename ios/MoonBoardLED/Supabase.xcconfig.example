@@ -1,0 +1,19 @@
+// Supabase.xcconfig.example — template for the app's Supabase credentials.
+//
+// Copy this file to `Supabase.xcconfig` (same folder), fill in the two values from
+// your Supabase project (Dashboard → Project Settings → API), and wire the file into
+// the target's build configurations (see docs/social-accounts-login-SETUP.md).
+//
+// `Supabase.xcconfig` is gitignored — the real values never get committed. The anon
+// key is public-safe (it only grants what Row-Level Security allows), but keeping it
+// out of git keeps project-specific config out of the repo.
+//
+// NOTE: xcconfig treats `//` as a comment anywhere on a line, which would eat the
+// `https://` in the URL. Reference the value as `$(SUPABASE_HOST)` and rebuild the
+// scheme in code (see SupabaseClientProvider) — store the host WITHOUT the scheme.
+
+// Host only, no scheme and no trailing slash, e.g. abcdefghijklmno.supabase.co
+SUPABASE_HOST = your-project-ref.supabase.co
+
+// Project anon / public key (a long JWT starting with "eyJ...").
+SUPABASE_ANON_KEY = your-anon-key-here
