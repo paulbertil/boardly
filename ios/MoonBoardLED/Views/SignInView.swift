@@ -50,9 +50,10 @@ struct SignInView: View {
                         Text("We emailed a 6-digit code to \(email). Enter it below.")
                             .font(.callout)
                             .foregroundStyle(.secondary)
-                        TextField("123456", text: $code)
-                            .keyboardType(.numberPad)
-                            .textContentType(.oneTimeCode)
+                        OTPCodeField(code: $code) {
+                            Task { await verifyCode() }
+                        }
+                        .padding(.vertical, 4)
                         Button {
                             Task { await verifyCode() }
                         } label: {
@@ -130,6 +131,7 @@ struct SignInView: View {
     }
 
     private func verifyCode() async {
+        guard !isWorking else { return }
         errorMessage = nil
         isWorking = true
         defer { isWorking = false }
