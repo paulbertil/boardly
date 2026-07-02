@@ -181,14 +181,20 @@ final class AuthManager: ObservableObject {
     }
 
     private func handle(event: AuthChangeEvent, session: Session?) async {
-        isRestoring = false
         guard session != nil else {
             status = .signedOut
             profile = nil
+            isRestoring = false
             return
         }
         // Signed in — resolve whether a profile exists to land in the right state.
+        // Clear `isRestoring` only AFTER status is resolved: refreshProfile() does a
+        // network round-trip, and if we cleared it first, status would still read the
+        // default `.signedOut` during that ~1s window — long enough for Settings to
+        // offer "Sign in", the user to open the sheet, and the resolved session to then
+        // auto-dismiss it out from under them.
         await refreshProfile()
+        isRestoring = false
     }
 
     /// Loads the current user's profile row and moves the status machine accordingly.
