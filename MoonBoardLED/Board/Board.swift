@@ -71,10 +71,75 @@ struct Board: Identifiable, Hashable {
         catalogPrefix: "MoonBoardMasters2019Catalog",
         membershipResource: "MoonBoardMasters2019HoldSets")
 
-    /// Boards shown in the Home "Boards" section, in order.
-    static let all: [Board] = [mini2025, masters2019]
+    static let moonboard2024 = Board(
+        setup: MoonBoardSetup.with(id: 3)!, angles: [40, 25],
+        catalogPrefix: "MoonBoard2024Catalog",
+        membershipResource: "MoonBoard2024HoldSets")
+
+    static let moonboard2016 = Board(
+        setup: MoonBoardSetup.with(id: 2)!, angles: [40, 25],
+        catalogPrefix: "MoonBoard2016Catalog",
+        membershipResource: "MoonBoard2016HoldSets")
+
+    static let masters2017 = Board(
+        setup: MoonBoardSetup.with(id: 4)!, angles: [40, 25],
+        catalogPrefix: "MoonBoardMasters2017Catalog",
+        membershipResource: "MoonBoardMasters2017HoldSets")
+
+    /// Every board the app supports, in registry order. This is the catalog of
+    /// what *can* be added — the boards a user actually owns are tracked separately
+    /// by `AddedBoards`.
+    static let all: [Board] = [mini2025, masters2019, moonboard2024, masters2017, moonboard2016]
 
     static func with(layoutId: Int) -> Board { all.first { $0.id == layoutId } ?? mini2025 }
+}
+
+/// The boards the user has added to their app, persisted as a "|"-joined list of
+/// layout ids in `@AppStorage(AddedBoards.storageKey)`. Empty = none added yet (the
+/// first-launch onboarding state). Order is insertion order: appended on add, so
+/// the last id is the most-recently-added board (used when reassigning the active
+/// board after a delete). Ids that no longer map to a supported board are ignored.
+enum AddedBoards {
+    static let storageKey = "addedBoards"
+
+    /// Added board ids, in insertion order, de-duplicated and filtered to boards the
+    /// app still supports.
+    static func ids(from csv: String) -> [Int] {
+        let supported = Set(Board.all.map(\.id))
+        var seen = Set<Int>()
+        return csv.split(separator: "|").compactMap { Int($0) }
+            .filter { supported.contains($0) && seen.insert($0).inserted }
+    }
+
+    /// The added boards, in insertion order.
+    static func boards(from csv: String) -> [Board] {
+        ids(from: csv).map(Board.with(layoutId:))
+    }
+
+    /// Supported boards not yet added, in registry order — the pick-list for the
+    /// add flow. Empty means every board has been added.
+    static func available(from csv: String) -> [Board] {
+        let added = Set(ids(from: csv))
+        return Board.all.filter { !added.contains($0.id) }
+    }
+
+    static func csv(from ids: [Int]) -> String {
+        ids.map(String.init).joined(separator: "|")
+    }
+
+    /// Move a board to the front of the most-recently-used order, adding it if it
+    /// isn't present. Called when a board is added or activated, so the front of the
+    /// list is always the most recently used board.
+    static func promoting(_ id: Int, in csv: String) -> String {
+        var list = ids(from: csv).filter { $0 != id }
+        list.insert(id, at: 0)
+        return self.csv(from: list)
+    }
+
+    /// The added-boards CSV as currently persisted (app-global state).
+    static var currentCSV: String {
+        UserDefaults.standard.string(forKey: storageKey) ?? ""
+    }
 }
 
 /// Resolves a logged ascent's `sourceCatalogID` back to its board + problem, across
@@ -98,5 +163,16 @@ enum CatalogIndex {
     static func entry(forCatalogID id: String?) -> Entry? {
         guard let id else { return nil }
         return shared[id]
+    }
+}
+
+extension Ascent {
+    /// The board this ascent belongs to for filtering. When the ascent came from a
+    /// catalog problem, its board is resolved from that problem — authoritative even
+    /// if the stored `boardLayoutId` is stale (e.g. attempts logged before the board
+    /// id was threaded through defaulted to the Mini's id). Falls back to the stored
+    /// `boardLayoutId` for user-created problems, which have no catalog id.
+    var effectiveBoardLayoutId: Int {
+        CatalogIndex.entry(forCatalogID: sourceCatalogID)?.board.id ?? boardLayoutId
     }
 }
