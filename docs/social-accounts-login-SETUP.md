@@ -4,7 +4,7 @@ The login + profile feature (branch `feat/social-accounts-login`) is code-comple
 **will not build or run until you finish the manual steps below** — creating the backend,
 adding the SDK, and wiring up config that can't be scripted. Do them in order.
 
-Scope of this milestone: **email magic link + Google sign-in + a `@handle` profile.**
+Scope of this milestone: **email code + Google sign-in + a `@handle` profile.**
 Sign in with Apple, cloud logbook sync, friends, and shared lists are later plans.
 
 ---
@@ -31,8 +31,13 @@ the `delete_user()` account-deletion RPC.
 
 **Authentication → Providers:**
 
-- **Email** — enable. Confirm "magic link" style sign-in is on (default). Under
-  **Authentication → Email templates**, the default "Magic Link" template is fine.
+- **Email** — enable. The app signs in with a **6-digit code** (not a tappable magic
+  link — a link relies on Safari redirecting into the app's custom URL scheme, which
+  mobile Safari blocks/lands on about:blank without Universal Links). For the code to
+  appear in the email, edit the **Magic Link** template under **Authentication → Email
+  templates** to include the token, e.g. add a line:
+  `Your code is {{ .Token }}` (keep or drop the `{{ .ConfirmationURL }}` link — the app
+  ignores it). Without `{{ .Token }}` in the template, no code is emailed.
 - **Google** — enable, then paste a Google OAuth **Client ID** and **Client secret**
   (created in step 4). Leave it enabled but unconfigured until you have those.
 - **Apple** — leave **disabled** (deferred until paid Apple Developer enrollment).
@@ -111,7 +116,7 @@ So magic-link / OAuth redirects return to the app.
 `⌘R` onto a real device (BLE needs hardware; auth works in the Simulator too). Then run
 through the plan's verification checklist:
 
-- Sign in via **magic link** and **Google**; confirm a `profiles` row appears
+- Sign in via **email code** and **Google**; confirm a `profiles` row appears
   (Supabase → Table editor → `profiles`) and that a second account can't claim a taken
   handle (case-insensitively).
 - Google, then magic link at the **same email** → one account, one profile.

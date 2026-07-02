@@ -62,13 +62,28 @@ final class AuthManager: ObservableObject {
 
     // MARK: - Sign in
 
-    /// Email magic link: Supabase mails a one-time link that deep-links back via the
-    /// custom URL scheme; `handleCallback(url:)` completes the sign-in.
-    func signInWithMagicLink(email: String) async throws {
+    /// Emails a 6-digit one-time code. Chosen over a tappable magic link because a link
+    /// relies on Safari handing a server redirect back to the app's custom URL scheme,
+    /// which mobile Safari blocks (lands on about:blank) without Universal Links (a paid
+    /// Apple account + hosted domain — deferred). A typed code has no redirect and works
+    /// identically on device and Simulator. `verifyEmailCode` completes the sign-in.
+    ///
+    /// Requires the Supabase email template to surface `{{ .Token }}` — see the setup doc.
+    func sendEmailCode(email: String) async throws {
         let client = try requireClient()
         try await client.auth.signInWithOTP(
+            email: email.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+    }
+
+    /// Verifies the 6-digit code the user typed, establishing a session. The
+    /// `authStateChanges` listener then advances `status` and loads the profile.
+    func verifyEmailCode(email: String, code: String) async throws {
+        let client = try requireClient()
+        try await client.auth.verifyOTP(
             email: email.trimmingCharacters(in: .whitespacesAndNewlines),
-            redirectTo: SupabaseConfig.redirectURL
+            token: code.trimmingCharacters(in: .whitespacesAndNewlines),
+            type: .email
         )
     }
 

@@ -1,22 +1,30 @@
 import SwiftUI
 
-/// Sign-in sheet: email magic link + Google. (Sign in with Apple is deferred until
+/// Sign-in sheet: email 6-digit code + Google. (Sign in with Apple is deferred until
 /// paid Apple Developer enrollment — see `AuthManager.signInWithApple`.)
 ///
-/// Presented from the Account section of Settings. Auth is optional: dismissing this
-/// leaves the app fully usable signed-out.
+/// Email uses a typed one-time code rather than a tappable magic link: a link depends on
+/// Safari redirecting into the app's custom URL scheme, which mobile Safari blocks
+/// (about:blank) without Universal Links. A code has no redirect and works on device and
+/// Simulator alike. Presented from the Account section of Settings; dismissing it leaves
+/// the app fully usable signed-out.
 struct SignInView: View {
     @EnvironmentObject private var auth: AuthManager
     @Environment(\.dismiss) private var dismiss
 
     @State private var email = ""
+    @State private var code = ""
+    @State private var codeSent = false
     @State private var isWorking = false
-    @State private var magicLinkSent = false
     @State private var errorMessage: String?
 
     private var emailLooksValid: Bool {
         let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.contains("@") && trimmed.contains(".")
+    }
+
+    private var codeLooksValid: Bool {
+        code.trimmingCharacters(in: .whitespacesAndNewlines).count >= 6
     }
 
     var body: some View {
@@ -37,32 +45,48 @@ struct SignInView: View {
                                 .foregroundStyle(.orange)
                         }
                     }
-                } else if magicLinkSent {
-                    Section {
-                        Label {
-                            Text("Check your email for a sign-in link, then return to the app.")
-                        } icon: {
-                            Image(systemName: "envelope.badge")
-                                .foregroundStyle(.green)
+                } else if codeSent {
+                    Section("Enter code") {
+                        Text("We emailed a 6-digit code to \(email). Enter it below.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                        TextField("123456", text: $code)
+                            .keyboardType(.numberPad)
+                            .textContentType(.oneTimeCode)
+                        Button {
+                            Task { await verifyCode() }
+                        } label: {
+                            HStack {
+                                Text("Verify & sign in")
+                                Spacer()
+                                if isWorking { ProgressView() }
+                            }
                         }
+                        .disabled(!codeLooksValid || isWorking)
+                        Button("Use a different email") {
+                            codeSent = false
+                            code = ""
+                            errorMessage = nil
+                        }
+                        .foregroundStyle(.secondary)
                     }
                 } else {
-                    Section("Email magic link") {
+                    Section("Email a sign-in code") {
                         TextField("you@example.com", text: $email)
                             .textContentType(.emailAddress)
                             .keyboardType(.emailAddress)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                         Button {
-                            Task { await sendMagicLink() }
+                            Task { await sendCode() }
                         } label: {
                             HStack {
-                                Text("Email me a link")
+                                Text("Email me a code")
                                 Spacer()
                                 if isWorking { ProgressView() }
                             }
                         }
-                        .disabled(!emailLooksValid || isWorking || !auth.isConfigured)
+                        .disabled(!emailLooksValid || isWorking)
                     }
                 }
 
@@ -86,22 +110,34 @@ struct SignInView: View {
                     Button("Cancel") { dismiss() }
                 }
             }
-            // Once a session lands (magic-link return or Google), close the sheet.
+            // Once a session lands (code verified or Google), close the sheet.
             .onChange(of: auth.status) { _, newValue in
                 if newValue != .signedOut { dismiss() }
             }
         }
     }
 
-    private func sendMagicLink() async {
+    private func sendCode() async {
         errorMessage = nil
         isWorking = true
         defer { isWorking = false }
         do {
-            try await auth.signInWithMagicLink(email: email)
-            magicLinkSent = true
+            try await auth.sendEmailCode(email: email)
+            codeSent = true
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    private func verifyCode() async {
+        errorMessage = nil
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            try await auth.verifyEmailCode(email: email, code: code)
+            // Success advances auth.status; the onChange above dismisses the sheet.
+        } catch {
+            errorMessage = "That code didn't work. Check it and try again, or request a new one."
         }
     }
 
