@@ -57,6 +57,16 @@ struct BoardImageView: View {
         Array(Set(holds.map { "\($0.col)-\($0.row)" }).union(selectedHolds)).sorted()
     }
 
+    /// Beta is only meaningful when the problem actually distinguishes moves — i.e.
+    /// it uses a left or match hold. A problem built only from start/right/end holds
+    /// gains nothing from per-hold labels ("Right", "Right", …), so we suppress them
+    /// even when "Show beta" is on.
+    private var betaAvailable: Bool {
+        holds.contains { $0.type == .left || $0.type == .match }
+    }
+    /// "Show beta" as requested, but gated on the problem carrying beta at all.
+    private var effectiveShowBeta: Bool { showBeta && betaAvailable }
+
     var body: some View {
         let geom = setup.geometry
         // Marker size tracks the column spacing so rings sit snugly on the holds.
@@ -135,7 +145,7 @@ struct BoardImageView: View {
     @ViewBuilder
     private func holdMarker(col: Int, row: Int, size: CGFloat) -> some View {
         let assignment = assignments["\(col)-\(row)"]
-        let shownType = assignment?.type.displayed(showBeta: showBeta)
+        let shownType = assignment?.type.displayed(showBeta: effectiveShowBeta)
         let shownColor = shownType?.color
         let isHighlighted = highlight.map { $0.col == col && $0.row == row } ?? false
         let isSelected = selectedHolds.contains("\(col)-\(row)")
@@ -156,7 +166,7 @@ struct BoardImageView: View {
             }
             .shadow(color: .black.opacity(assignment == nil && !isHighlighted ? 0 : 0.5), radius: 1)
             .overlay(alignment: .bottom) {
-                if showBeta, let shownType {
+                if effectiveShowBeta, let shownType {
                     Text(shownType.label)
                         .font(.system(size: max(8, size * 0.34), weight: .bold))
                         .foregroundStyle(.white)

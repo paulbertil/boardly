@@ -6,7 +6,6 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var ble: MoonBoardBLEManager
     @AppStorage("appAppearance") private var appearance: AppAppearance = .system
-    @AppStorage("showBeta") private var showBeta = true
     @AppStorage("autoLightOnSwipe") private var autoLightOnSwipe = false
     @AppStorage("showClimbPreviews") private var showClimbPreviews = true
 
@@ -20,7 +19,10 @@ struct SettingsView: View {
                         ForEach(AppAppearance.allCases) { Text($0.label).tag($0) }
                     }
                     .pickerStyle(.segmented)
-                    Toggle("Show beta", isOn: $showBeta)
+                    // "Show beta" is hidden for now: no bundled catalog uses
+                    // left/match holds, so there's no beta to show. The `showBeta`
+                    // setting (default on) still drives BoardImageView — restore
+                    // this toggle once problems with real beta ship.
                     Toggle("Show climb previews", isOn: $showClimbPreviews)
                 }
 
