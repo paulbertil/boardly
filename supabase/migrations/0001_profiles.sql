@@ -90,7 +90,7 @@ grant execute on function public.delete_user() to authenticated;
 --     (paste the Google OAuth client id + secret). Sign in with Apple is deferred
 --     until paid Apple Developer enrollment.
 --   • Authentication → URL Configuration → add the app's redirect URL
---     `com.bertil.moonboardled://auth-callback` to the allow-list.
+--     `com.boardly://auth-callback` to the allow-list.
 --   • Authentication → set **"Link a new identity to an existing user" / account
 --     linking = ON** so Google + magic link at the same verified email resolve to a
 --     single user (one profile). Not settable from SQL.

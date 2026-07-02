@@ -54,7 +54,7 @@ the `delete_user()` account-deletion RPC.
 
 **Authentication → URL Configuration:**
 
-- Add to **Redirect URLs**: `com.bertil.moonboardled://auth-callback`
+- Add to **Redirect URLs**: `com.boardly://auth-callback`
   (this is the app's custom scheme; it must match exactly — see step 8).
 
 **Authentication → (Sign In / Providers settings):**
@@ -100,10 +100,10 @@ the `delete_user()` account-deletion RPC.
 So magic-link / OAuth redirects return to the app.
 
 - **MoonBoardLED target → Info** tab → **URL Types** → **+**:
-  - **Identifier:** `com.bertil.moonboardled` (any unique string)
-  - **URL Schemes:** `com.bertil.moonboardled`
+  - **Identifier:** `com.boardly` (any unique string)
+  - **URL Schemes:** `com.boardly`
 - This must match `SupabaseConfig.redirectURL`
-  (`com.bertil.moonboardled://auth-callback`) and the redirect URL you allow-listed in
+  (`com.boardly://auth-callback`) and the redirect URL you allow-listed in
   step 5.
 
 ## 9. Build & verify

@@ -16,7 +16,7 @@ enum SupabaseConfig {
     /// Custom URL scheme the OAuth / magic-link redirect returns to. Must match the
     /// URL Type registered on the target and the redirect URL allow-listed in the
     /// Supabase dashboard. Reverse-DNS to avoid collisions with other apps.
-    static let redirectURL = URL(string: "com.bertil.moonboardled://auth-callback")!
+    static let redirectURL = URL(string: "com.boardly://auth-callback")!
 
     /// Whether both credentials are present — the gate for enabling any auth UI.
     static var isConfigured: Bool { supabaseURL != nil && anonKey != nil }
