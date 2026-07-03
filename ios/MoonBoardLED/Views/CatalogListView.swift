@@ -49,18 +49,21 @@ struct CatalogListView: View {
     private static let baselineSecondary: SortKey? = .mostRepeats
 
     /// Multi-select status/attribute filters shown in the "Filters" section.
-    /// The three status cases (`myAscents`/`notCompleted`/`notLogged`) are
-    /// combined with OR; `benchmarks` and `favorites` each AND on top.
+    /// The three status cases (`completed`/`projects`/`notCompleted`) are combined with
+    /// OR; `benchmarks` and `favorites` each AND on top. `completed` = sent; `projects`
+    /// = tried but not sent; `notCompleted` = anything not sent (projects + never-touched,
+    /// i.e. the merged `!sent` bucket — this absorbs the old "Not logged" filter). Old
+    /// persisted selections are normalized once by `CatalogFilterMigration`.
     enum CatalogFilter: String, CaseIterable, Identifiable {
         case benchmarks   = "Benchmarks"
-        case myAscents    = "My ascents"
+        case completed    = "Completed"
+        case projects     = "Projects"
         case notCompleted = "Not completed"
-        case notLogged    = "Not logged"
         case favorites    = "Favorites"
 
         var id: String { rawValue }
         /// The status cases form one OR'd group.
-        static var statusCases: [CatalogFilter] { [.myAscents, .notCompleted, .notLogged] }
+        static var statusCases: [CatalogFilter] { [.completed, .projects, .notCompleted] }
     }
 
     let board: Board
@@ -314,9 +317,9 @@ struct CatalogListView: View {
         guard !statusSelected.isEmpty else { return true }
         return statusSelected.contains { status in
             switch status {
-            case .myAscents:    return sent.contains(p.id)
-            case .notCompleted: return logged.contains(p.id) && !sent.contains(p.id)
-            case .notLogged:    return !logged.contains(p.id)
+            case .completed:    return sent.contains(p.id)
+            case .projects:     return logged.contains(p.id) && !sent.contains(p.id)
+            case .notCompleted: return !sent.contains(p.id)
             default:            return false
             }
         }

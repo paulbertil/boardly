@@ -88,6 +88,7 @@ struct RootTabView: View {
         //   • pull on foreground; push already fires on each write
         .task {
             LogbookMigration.runIfNeeded(modelContext)
+            CatalogFilterMigration.runIfNeeded()
             await sync.handleSignIn()
         }
         .onChange(of: auth.status) { _, newStatus in
