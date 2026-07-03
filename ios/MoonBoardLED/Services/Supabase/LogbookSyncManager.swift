@@ -100,8 +100,8 @@ final class LogbookSyncManager: ObservableObject {
             FetchDescriptor<Problem>(predicate: #Predicate { $0.needsSync })
         )
         if !dirtyProblems.isEmpty {
-            let rows = dirtyProblems.map { UserProblemRow(problem: $0, userID: userID) }
-            let saved: [UserProblemRow] = try await client
+            let rows = dirtyProblems.map { UserProblemSyncRow(problem: $0, userID: userID) }
+            let saved: [UserProblemSyncRow] = try await client
                 .from("user_problems").upsert(rows, returning: .representation).execute().value
             let byID = Dictionary(saved.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
             for problem in dirtyProblems {
@@ -115,8 +115,8 @@ final class LogbookSyncManager: ObservableObject {
             FetchDescriptor<Ascent>(predicate: #Predicate { $0.needsSync })
         )
         if !dirtyAscents.isEmpty {
-            let rows = dirtyAscents.map { AscentRow(ascent: $0, userID: userID) }
-            let saved: [AscentRow] = try await client
+            let rows = dirtyAscents.map { AscentSyncRow(ascent: $0, userID: userID) }
+            let saved: [AscentSyncRow] = try await client
                 .from("ascents").upsert(rows, returning: .representation).execute().value
             let byID = Dictionary(saved.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
             for ascent in dirtyAscents {
@@ -136,7 +136,7 @@ final class LogbookSyncManager: ObservableObject {
         var newest = SyncDate.date(cursor) ?? .distantPast
 
         // user_problems first (ascents may link to them).
-        let problemRows: [UserProblemRow] = try await client
+        let problemRows: [UserProblemSyncRow] = try await client
             .from("user_problems").select()
             .gt("updated_at", value: cursor)
             .order("updated_at", ascending: true)
@@ -146,7 +146,7 @@ final class LogbookSyncManager: ObservableObject {
             if let ts = SyncDate.date(row.updated_at), ts > newest { newest = ts }
         }
 
-        let ascentRows: [AscentRow] = try await client
+        let ascentRows: [AscentSyncRow] = try await client
             .from("ascents").select()
             .gt("updated_at", value: cursor)
             .order("updated_at", ascending: true)
@@ -161,7 +161,7 @@ final class LogbookSyncManager: ObservableObject {
     }
 
     /// LWW apply: incoming wins iff its `updated_at` is newer than the local row's.
-    private func applyProblem(_ row: UserProblemRow) {
+    private func applyProblem(_ row: UserProblemSyncRow) {
         let incoming = SyncDate.date(row.updated_at) ?? .distantPast
         let id = row.id
         let existing = try? context.fetch(
@@ -186,7 +186,7 @@ final class LogbookSyncManager: ObservableObject {
         // A tombstone for a row we never had: nothing to insert; cursor still advances.
     }
 
-    private func applyAscent(_ row: AscentRow) {
+    private func applyAscent(_ row: AscentSyncRow) {
         let incoming = SyncDate.date(row.updated_at) ?? .distantPast
         let id = row.id
         let existing = try? context.fetch(
@@ -212,7 +212,7 @@ final class LogbookSyncManager: ObservableObject {
         }
     }
 
-    private func apply(_ row: AscentRow, to ascent: Ascent) {
+    private func apply(_ row: AscentSyncRow, to ascent: Ascent) {
         ascent.date = SyncDate.date(row.date) ?? ascent.date
         ascent.sourceCatalogID = row.source_catalog_id
         ascent.userProblemID = row.user_problem_id

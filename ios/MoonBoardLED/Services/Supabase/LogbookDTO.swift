@@ -9,7 +9,7 @@ import Foundation
 /// `updated_at` is server-authoritative: we send it on insert-seed but always read the
 /// server's value back (via `returning: .representation`) to advance the pull cursor.
 
-struct AscentRow: Codable {
+struct AscentSyncRow: Codable {
     var id: UUID
     var user_id: UUID
     var date: String
@@ -45,7 +45,7 @@ struct AscentRow: Codable {
     }
 }
 
-struct UserProblemRow: Codable {
+struct UserProblemSyncRow: Codable {
     var id: UUID
     var user_id: UUID
     var name: String
