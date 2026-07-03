@@ -4,9 +4,8 @@ A native iOS app (with a companion Web Bluetooth PWA) to create boulder problems
 them on a MoonBoard LED system running the
 [ArduinoMoonBoardLED](https://github.com/FabianRig/ArduinoMoonBoardLED) firmware.
 
-Built to replace the official MoonBoard app for controlling the LEDs, which broke after a
-recent update. The Arduino firmware is unchanged — this app just speaks its Nordic-UART
-protocol correctly.
+The Arduino firmware is treated as fixed — this app speaks its Nordic-UART protocol correctly
+and does not modify the firmware.
 
 > **Contributing / picking this up?** Read [`CONTEXT.md`](CONTEXT.md) first — it's the
 > orientation doc (repo map, build, gotchas, and links into [`docs/`](docs/README.md)). This

@@ -11,9 +11,8 @@ Pairs with [`README.md`](README.md) (user-facing run guide).
 A system to create climbing problems and light them on a **DIY MoonBoard LED wall** over
 Bluetooth. The reference hardware is a **Mini MoonBoard 2025** (11 cols A–K × 12 rows = 132
 holds) with a home-built LED strip driven by an **Arduino** running
-[FabianRig/ArduinoMoonBoardLED](https://github.com/FabianRig/ArduinoMoonBoardLED). It was built
-to replace the official app, which broke the LEDs (the "20-byte bug" below) and is buggy
-generally. The firmware is **unchanged** — the app just speaks its BLE protocol correctly.
+[FabianRig/ArduinoMoonBoardLED](https://github.com/FabianRig/ArduinoMoonBoardLED). The Arduino
+firmware is treated as fixed — the app speaks its BLE protocol; it does not modify the firmware.
 
 ## Repo map (a monorepo)
 
@@ -26,10 +25,6 @@ generally. The firmware is **unchanged** — the app just speaks its BLE protoco
 | `docs/` | Subsystem deep dives + index ([docs/README.md](docs/README.md)). |
 | `scripts/` | Python catalog fetchers + board-art importers. |
 | `catalog-data/` | Pre-fetched board catalogs (NOT bundled; copy into iOS `Resources/` to add a board). |
-
-**Scope has moved past the old "iOS-only, no login, Mini-only" MVP:** accounts exist (email
-code + Google via Supabase, `@handle` profiles), multiple boards ship, and there's a web PWA.
-Auth is *additive* everywhere — the app is fully usable signed-out.
 
 ## Build & run
 
@@ -59,8 +54,8 @@ needs a secure context — desktop Chrome/Edge, Android Chrome, or iPhone via Bl
   == nil`, `AuthManager` stays `signedOut`/inert, and Settings shows no auth entry point.
   Preserve "app fully usable signed-out."
 - **SwiftData enum-rename crash.** Changing/removing a `HoldType` raw value makes old saved
-  problems undecodable → fatal `DecodingError` on launch. No migration shim (removed
-  deliberately) — the app must be deleted from the device to wipe the store. See
+  problems undecodable → fatal `DecodingError` on launch. There is intentionally no migration
+  shim — the app must be deleted from the device to wipe the store. See
   [docs/data-model-and-logging.md](docs/data-model-and-logging.md).
 - **Secrets are local-only.** Real Supabase creds live in `web/.env`
   (`VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`) and `ios/MoonBoardLED/Supabase.xcconfig` —
