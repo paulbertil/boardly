@@ -1,9 +1,14 @@
 import SwiftUI
+import SwiftData
 
 /// App shell: a bottom tab bar with Home (boards + logbook), Settings, and Search
 /// (the active board's catalog browser). Search is outermost right.
 struct RootTabView: View {
     @AppStorage("appAppearance") private var appearance: AppAppearance = .system
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var auth: AuthManager
+    @EnvironmentObject private var sync: LogbookSyncManager
     /// The board Search browses and Home marks active. Defaults to the Mini 2025
     /// (the physical board). Home writes it; Search reads it.
     @AppStorage(ActiveBoard.storageKey) private var activeBoardId = ActiveBoard.default
@@ -76,6 +81,29 @@ struct RootTabView: View {
         // the sign-in → profile-setup flow. Presenting it here as well raced with that
         // sheet (both targeting the same presenting controller during the sign-in
         // transition), so it lives in exactly one place now.
+        //
+        // Cloud logbook sync wiring (additive; all no-ops when signed out):
+        //   • one-time local migration, then a first sync/reconciliation on launch
+        //   • re-check on the sign-in transition (idempotent — reconciles once per device)
+        //   • pull on foreground; push already fires on each write
+        .task {
+            LogbookMigration.runIfNeeded(modelContext)
+            await sync.handleSignIn()
+        }
+        .onChange(of: auth.status) { _, newStatus in
+            if newStatus != .signedOut {
+                Task { await sync.handleSignIn() }
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                Task { await sync.syncNow() }
+            }
+        }
+        .sheet(isPresented: $sync.pendingReconciliation) {
+            LogbookReconciliationView()
+                .interactiveDismissDisabled()
+        }
     }
 }
 
