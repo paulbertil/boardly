@@ -21,3 +21,6 @@ ios/MoonBoardLED/Supabase.xcconfig
 
 # Compound Engineering machine-local config
 .compound-engineering/*.local.yaml
+
+# Claude Code machine-local permissions (never commit)
+.claude/settings.local.json
