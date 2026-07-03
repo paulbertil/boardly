@@ -6,13 +6,25 @@ here grows into a second copy of a `docs/` file, trim it back to a summary + lin
 
 Pairs with [`README.md`](README.md) (user-facing run guide).
 
-## What this is & why
+## What this is
 
-A system to create climbing problems and light them on a **DIY MoonBoard LED wall** over
-Bluetooth. The reference hardware is a **Mini MoonBoard 2025** (11 cols A–K × 12 rows = 132
-holds) with a home-built LED strip driven by an **Arduino** running
-[FabianRig/ArduinoMoonBoardLED](https://github.com/FabianRig/ArduinoMoonBoardLED). The Arduino
-firmware is treated as fixed — the app speaks its BLE protocol; it does not modify the firmware.
+A native **SwiftUI + SwiftData iOS app** (plus a companion Web Bluetooth PWA — see the repo
+map) for authoring and lighting boulder problems on a **DIY LED-wired MoonBoard**. You build a
+problem by tapping holds (auto-cycling taps or per-role brushes, Font grade); the app drives an
+**Arduino** running the fixed
+[FabianRig/ArduinoMoonBoardLED](https://github.com/FabianRig/ArduinoMoonBoardLED) firmware over
+Bluetooth (Nordic UART) to live-preview, light, clear, and calibrate the LEDs.
+
+The reference/physical hardware is a **Mini MoonBoard 2025** (11 cols A–K × 12 rows = 132
+holds). LED geometry is row-parameterized (12-row Mini / 18-row full boards) and the lighting
+path can drive a full wall too — the Mini is a hardware limit, not a code one; only the
+custom-problem editor is Mini-specific.
+
+Beyond authoring it bundles read-only **official-problem catalogs** for five layouts (Mini
+2025, 2016, 2024, Masters 2017/2019 — ~22k problems across 40°/25°) with search/sort/filter/
+favorites, a **multi-board** model (per-board angle + installed hold-set filtering), a local
+**logbook** of ascents/attempts with a grade-pyramid view, and **optional accounts** (email
+code or Google, `@handle`). Everything except sign-in works fully offline.
 
 ## Repo map (a monorepo)
 
