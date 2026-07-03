@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Collaborative Lists — Ideation</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1a1a1a; --muted: #666; --card: #f6f7f9; --border: #e2e5ea;
+    --accent: #2f6df6; --green: #1a9e5c; --amber: #d98416; --pink: #d6336c;
+    --chip: #eaeef6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a; --fg: #e8eaed; --muted: #9aa0a8; --card: #1e2127; --border: #2b2f36;
+      --accent: #6f9dff; --green: #46c88a; --amber: #f0a94e; --pink: #f06592; --chip: #262b33;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 40px 22px 80px; }
+  h1 { font-size: 1.9rem; margin: 0 0 4px; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); margin: 0 0 28px; }
+  h2 { font-size: 1.25rem; margin: 40px 0 12px; letter-spacing: -0.01em; }
+  p { margin: 0 0 12px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: .85rem; color: var(--muted);
+    border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; background: var(--card); }
+  .axes { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 4px; }
+  .chip { background: var(--chip); border-radius: 999px; padding: 3px 11px; font-size: .8rem; color: var(--fg); white-space: nowrap; }
+  .lead { background: var(--card); border: 1px solid var(--border); border-left: 3px solid var(--accent);
+    border-radius: 10px; padding: 14px 18px; margin: 18px 0 8px; }
+  .dirs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 8px 0 4px; }
+  @media (max-width: 640px) { .dirs { grid-template-columns: 1fr; } }
+  .dir { border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; background: var(--card); }
+  .dir h3 { margin: 0 0 6px; font-size: 1rem; }
+  .dir p { font-size: .9rem; color: var(--muted); margin: 0; }
+  .card { border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; margin: 16px 0; background: var(--card); }
+  .card .top { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .rank { font-weight: 700; color: var(--accent); font-size: 1.05rem; }
+  .card h3 { margin: 0; font-size: 1.12rem; flex: 1; letter-spacing: -0.01em; }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 6px; }
+  .tag { font-size: .74rem; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+  .tag.axis { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+  .tag.hi { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, transparent); }
+  .tag.med { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 40%, transparent); }
+  .field { margin: 8px 0; font-size: .95rem; }
+  .field b { color: var(--fg); }
+  .field.basis, .field.trade { color: var(--muted); font-size: .9rem; }
+  .converge { font-size: .82rem; color: var(--muted); font-style: italic; }
+  table { width: 100%; border-collapse: collapse; font-size: .9rem; margin-top: 8px; }
+  td, th { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  code { background: var(--chip); padding: 1px 6px; border-radius: 5px; font-size: .85em; }
+  .foot { color: var(--muted); font-size: .85rem; margin-top: 40px; border-top: 1px solid var(--border); padding-top: 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Collaborative Lists — Ideation</h1>
+  <p class="sub">Design-iteration directions for the group climbing feature · 3 Jul 2026</p>
+
+  <div class="meta">
+    <span><b>Subject:</b> the collaborative-lists feature (as built on <code>feat/collaborative-lists</code>)</span>
+    <span><b>Focus:</b> improve the design/UX</span>
+    <span><b>Fleet:</b> 5 frames → ~40 raw → 7 survivors</span>
+    <span><b>Grounding:</b> in-session (feature just designed &amp; built)</span>
+  </div>
+
+  <h2>The one thing to take away</h2>
+  <div class="lead">
+    All five ideation frames — pain, inversion, analogy, leverage, assumption-breaking — <b>independently converged</b>
+    on the same verdict: the current design over-builds a <em>persistent, hand-curated list living in its own tab</em>,
+    when the real moment is <em>a few people standing at a wall who want the app to just tell them what nobody's sent yet</em>.
+    The strongest directions all pull toward: <b>fold the group view into the catalog you already use, let it derive itself,
+    and make it a live session rather than a saved object.</b>
+  </div>
+
+  <p>The seven survivors group into two coherent directions plus a sequencing call. They're largely complementary — you can
+  pursue α and β together — but β contains a genuine fork (ephemeral session vs. keep a lightweight list).</p>
+
+  <div class="dirs">
+    <div class="dir">
+      <h3>Direction α — Surface &amp; structure</h3>
+      <p>The group view <em>is</em> the catalog, pre-answered and self-populating. Ideas 1–3. Lower risk, closest to your original vision.</p>
+    </div>
+    <div class="dir">
+      <h3>Direction β — Session model</h3>
+      <p>It's a live, ephemeral, co-located session, not a durable named list. Ideas 4–6. Bolder; contains the "do we keep a list at all?" fork.</p>
+    </div>
+  </div>
+
+  <h2>Topic axes</h2>
+  <div class="axes">
+    <span class="chip">setup-and-join</span>
+    <span class="chip">finding-together (the group filter)</span>
+    <span class="chip">the-shared-object (pile + badges)</span>
+    <span class="chip">liveness (session presence)</span>
+    <span class="chip">where-it-lives (app surface)</span>
+  </div>
+
+  <h2>Ranked ideas</h2>
+
+  <!-- 1 -->
+  <div class="card">
+    <div class="top"><span class="rank">1</span><h3>The group view is the catalog — kill the separate screen &amp; tab</h3></div>
+    <div class="tags"><span class="tag axis">where-it-lives</span><span class="tag hi">Confidence: High</span><span class="tag">Complexity: M</span></div>
+    <div class="field">Retire the Lists tab and the standalone "Browse &amp; add" screen. In the normal catalog browser, a single <code>Show for: me / us</code> toggle recolors the existing rows with co-members' status and extends the existing status filters (Completed / Projects / Not completed) with per-member sub-chips. The group filter becomes a <em>lens over the catalog you already live in</em>, not a place you go.</div>
+    <div class="field basis"><b>Basis</b> <code>direct</code> — this <em>was</em> your original vision; it got built standalone only to avoid destabilizing the 900-line catalog view. Every frame demanded it back.</div>
+    <div class="field"><b>Why it matters</b> — collapses three surfaces (pile / group-browse / main catalog) toward one and makes an occasional feature cost zero navigation when unused (the toggle just says "me").</div>
+    <div class="field trade"><b>Tradeoffs</b> — requires the catalog-view surgery you deliberately deferred; do it with the app running, incrementally, behind the toggle so the solo path stays byte-identical.</div>
+    <p class="converge">Converged from 5/5 frames (inversion #2, pain #6, analogy #4, leverage #3, assumption #4).</p>
+  </div>
+
+  <!-- 2 -->
+  <div class="card">
+    <div class="top"><span class="rank">2</span><h3>The pile derives itself — no manual "add"</h3></div>
+    <div class="tags"><span class="tag axis">the-shared-object</span><span class="tag hi">Confidence: High</span><span class="tag">Complexity: M</span></div>
+    <div class="field">Stop asking anyone to hand-curate. The shared surface defaults to a live query over members' existing logbooks — "problems nobody present has sent, shared projects first." Curation becomes <em>subtractive and optional</em> (pin a few, hide a few), never the price of entry. The pile can never go stale because it re-derives from the data.</div>
+    <div class="field basis"><b>Basis</b> <code>reasoned</code> — the whole payoff is a pure function of members' sent/tried sets, which the app already holds. Manual curation duplicates data you have and decays the moment someone logs.</div>
+    <div class="field"><b>Why it matters</b> — deletes the "did someone remember to add it?" failure mode and the night-before homework; the feature works the instant people are together.</div>
+    <div class="field trade"><b>Tradeoffs</b> — you lose deliberate "let's do exactly these 10" curation; pins recover that for the minority who want it.</div>
+    <p class="converge">Converged from 5/5 frames (inversion #1/#7, pain #8, leverage #4, assumption #3).</p>
+  </div>
+
+  <!-- 3 -->
+  <div class="card">
+    <div class="top"><span class="rank">3</span><h3>Open to the answer, not a query builder</h3></div>
+    <div class="tags"><span class="tag axis">finding-together</span><span class="tag hi">Confidence: High</span><span class="tag">Complexity: S–M</span></div>
+    <div class="field">The current per-member-chip × 3-bucket configurator makes the human construct the query (reason about "OR within, AND across") at exactly the moment they want to just climb. Invert it: the group view opens <em>pre-answered</em> — "nobody here has sent these; shared projects on top" — as a ranked feed. The boolean UI collapses to a couple of pre-baked lenses ("what can we all still work?", "who needs beta?") plus an "Adjust" escape hatch for the rare custom case.</div>
+    <div class="field basis"><b>Basis</b> <code>direct</code> — "Not completed → everyone" is already the one query 90% of sessions want; making users assemble it every time is the friction.</div>
+    <div class="field"><b>Why it matters</b> — turns a query tool into an answer. The clever combine-rule you built still runs underneath; it just stops being the user's job to operate.</div>
+    <div class="field trade"><b>Tradeoffs</b> — power users lose immediate access to arbitrary member/bucket combos; the "Adjust" affordance keeps them one tap away.</div>
+    <p class="converge">Converged from 3 frames (inversion #3, pain #1, assumption #5).</p>
+  </div>
+
+  <!-- 4 -->
+  <div class="card">
+    <div class="top"><span class="rank">4</span><h3>An ephemeral "who's here" session, not a persistent named list</h3></div>
+    <div class="tags"><span class="tag axis">setup-and-join</span><span class="tag med">Confidence: Medium</span><span class="tag">Complexity: L</span></div>
+    <div class="field">The boldest reframe (and the fork). Instead of creating, naming, and maintaining a durable list, you tap <code>I'm climbing here</code> at the wall; the app forms a session from whoever else is checked in on the same board right now. The shared view is the live union of everyone-present's projects/untouched problems. When people leave, the session evaporates — nothing to name, curate, or clean up.</div>
+    <div class="field basis"><b>Basis</b> <code>reasoned</code> — the relationship is inherently ephemeral and co-located (2–6 people, ~2 hours). A durable named object imports a remote-collaboration model into an in-person moment; the Pokémon-GO-raid pattern shows co-located groups coordinate better around a start-now session than a maintained collection.</div>
+    <div class="field"><b>Why it matters</b> — removes create + name + curate + manage-membership in one cut, and self-cleans (no "who are these 8 stale people in my list?").</div>
+    <div class="field trade"><b>The fork</b> — pure-ephemeral loses the genuinely useful "plan tomorrow's session in bed" use case you designed for. Middle path: sessions are ephemeral by default but can be <em>saved</em> if someone wants to keep one. Decide this in brainstorm.</div>
+    <p class="converge">Converged from 5 frames (pain #3, analogy #1, leverage #5, assumption #1/#2/#8).</p>
+  </div>
+
+  <!-- 5 -->
+  <div class="card">
+    <div class="top"><span class="rank">5</span><h3>Session-scoped liveness — presence &amp; live sends, not global realtime</h3></div>
+    <div class="tags"><span class="tag axis">liveness</span><span class="tag med">Confidence: Medium</span><span class="tag">Complexity: M–L</span></div>
+    <div class="field">You cut realtime to avoid the infra cost — but refresh-first quietly <em>lies</em> the moment someone sends. Resolve it by scoping liveness to an active session only: for the ~2 hours a group is together, sends propagate live (the problem greys out / drops off "nobody's done it" on every phone) and a thin presence rail shows who's here and pulses when they log an attempt. Realtime exactly when people are at the wall; nothing always-on.</div>
+    <div class="field basis"><b>Basis</b> <code>direct</code> — tension #2: a friend's send doesn't appear until you refresh, so two people can unknowingly climb the same thing. <code>external</code> — Peloton's ambient co-presence rail creates "we're in this together" with zero chat.</div>
+    <div class="field"><b>Why it matters</b> — the "nobody's sent this" claim is only trustworthy if it's current, and this is the app's first <em>social</em> feature — a little liveness is what makes it feel alive vs. a shared spreadsheet.</div>
+    <div class="field trade"><b>Tradeoffs</b> — real subscription/presence work (Supabase Realtime); gate it behind the session so cost and complexity stay bounded.</div>
+    <p class="converge">Converged from 5 frames (inversion #5, pain #3, analogy #5, leverage #5, assumption #7).</p>
+  </div>
+
+  <!-- 6 -->
+  <div class="card">
+    <div class="top"><span class="rank">6</span><h3>Count only who's actually here — plus scan-to-join</h3></div>
+    <div class="tags"><span class="tag axis">setup-and-join</span><span class="tag hi">Confidence: High</span><span class="tag">Complexity: S–M</span></div>
+    <div class="field"><b>A real correctness bug, not just polish:</b> "AND across members" over full, durable membership means one person sitting at home silently breaks the intersection — "nobody sent" quietly becomes "nobody of these 8, including the two absentees," producing empty or misleading results. Fix: a lightweight "who's climbing today" check-in, and default the filter to <em>present</em> members. Pair it with in-person join — a QR/short-code on one phone others scan — since the group is definitionally standing together (passing a deep link to the person next to you is the clunkiest possible step).</div>
+    <div class="field basis"><b>Basis</b> <code>direct</code> — the combine rule applied to persistent membership degrades <em>more</em> the more people ever joined. <code>external</code> — Kahoot/AirDrop/Spotify-Jam room-code join is the native idiom for co-located groups.</div>
+    <div class="field"><b>Why it matters</b> — without the present-roster fix the headline query silently gives wrong answers; scan-to-join removes the worst friction at the exact moment the feature lives or dies (arrival at the wall).</div>
+    <div class="field trade"><b>Tradeoffs</b> — a check-in adds one tap on arrival; worth it to keep results honest. (Note: it also lets you scope exposure to <em>this board</em>, a privacy win.)</div>
+    <p class="converge">The present-roster insight is a unique catch (pain #2); scan-to-join converged from 3 frames (pain #7, analogy #7, assumption #2).</p>
+  </div>
+
+  <!-- 7 -->
+  <div class="card">
+    <div class="top"><span class="rank">7</span><h3>Sequence it: ship 1:1 compare first; let co-membership grow a friend graph</h3></div>
+    <div class="tags"><span class="tag axis">where-it-lives</span><span class="tag med">Confidence: Medium</span><span class="tag">Complexity: M</span></div>
+    <div class="field">A build-order and foundation call, not a screen. Ship <em>"compare my logbook with one person"</em> before N-way groups: it's cheaper, more frequently useful (partner beta, "what should we both try?"), sidesteps the badge-scaling problem, and de-risks the whole social layer. And record a lightweight persistent edge every time you climb with someone — a "people you've climbed with" graph that accrues as a <em>byproduct</em>, powering "start a session with Sam?" and any future feed, without an explicit add-friend flow.</div>
+    <div class="field basis"><b>Basis</b> <code>reasoned</code> — this is the app's first social feature; the durable nouns worth investing in are <em>people</em> and <em>derived data</em>, with lists/sessions/filters as cheap views over them. The relationship data joining currently throws away is the classic compounding asset.</div>
+    <div class="field"><b>Why it matters</b> — the group feature inherits a proven 1:1 interaction instead of inventing one at full complexity, and you lay track the rest of the social layer runs on.</div>
+    <div class="field trade"><b>Tradeoffs</b> — "1:1 first" delays the group headline; frame it as the tracer, not a detour.</div>
+    <p class="converge">Converged from 3 leverage angles (leverage #1, #2, #8).</p>
+  </div>
+
+  <h2>Notable cuts</h2>
+  <p>Rejected or folded — with reasons. Several are good <em>refinements to pursue inside a chosen direction</em>, just not top-level design pivots.</p>
+  <table>
+    <tr><th>Idea</th><th>Disposition</th></tr>
+    <tr><td>Aggregate-first / "who's still blocking" badges (vs the colored-dot mosaic)</td><td>Real design win, but a refinement of idea 2's shared object — pursue when building it, not a standalone direction.</td></tr>
+    <tr><td>Loot-roll "call it?" quorum · turn-taking picks · setlist queue · ATC "strips"</td><td>Evocative session-coordination mechanics; better as brainstorm detail within idea 4/5 than as separate bets.</td></tr>
+    <tr><td>One shared screen + N controller phones / cast to a gym display</td><td>Bold but a different product bet (needs a shared display + the LED channel); parked as a wildcard.</td></tr>
+    <tr><td>No-object share-sheet "cross-check"</td><td>The radical pole of idea 4's fork; folded into that fork rather than listed separately.</td></tr>
+    <tr><td>Aggregate UGC data layer (community-hard, trending) · invite-as-growth-loop</td><td>Strong compounding plays, but adjacent to a "fix the design" ask — revisit as later-stage strategy.</td></tr>
+    <tr><td>Profiles as the atomic social primitive</td><td>Folded into idea 7 (people as the durable noun).</td></tr>
+  </table>
+  <p class="converge">Axis coverage: all five axes have at least one survivor (setup-and-join ×2, the-shared-object ×1, finding-together ×1, liveness ×1, where-it-lives ×2). No deliberate gaps.</p>
+
+  <div class="foot">
+    Generated by ce-ideate · 5 divergent frames + adversarial filter · grounded in the just-built feature.
+    Next: pick one to sharpen in <code>/ce-brainstorm</code>, or discuss the set further.
+  </div>
+
+</div>
+</body>
+</html>
