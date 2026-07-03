@@ -4,6 +4,14 @@ import SwiftData
 /// A saved boulder problem: a named set of holds with a Font grade.
 @Model
 final class Problem {
+    /// Stable identity. Added for cloud logbook sync so an ascent can link to a real
+    /// problem record (not just a name) and so the same problem converges across a
+    /// user's devices. NOT marked `.unique` at the SwiftData layer: a lightweight
+    /// migration that backfills existing rows can transiently share the default, and
+    /// a unique constraint would then crash. Uniqueness is enforced by the cloud
+    /// primary key + `Problem.backfillSyncIDsIfNeeded` (see R-M1 in the plan).
+    var id: UUID = UUID()
+
     var name: String
     var grade: String
     var createdAt: Date
@@ -11,7 +19,18 @@ final class Problem {
     /// Stored as a Codable value array. SwiftData persists this as part of the model.
     var holds: [HoldAssignment]
 
+    // MARK: Sync metadata (cloud logbook sync)
+    /// Server-authoritative last-write timestamp, mirrored down from the cloud. nil
+    /// until the row has round-tripped through sync (legacy/local-only rows).
+    var updatedAt: Date?
+    /// Soft-delete tombstone. Deleting a problem sets this instead of removing the row,
+    /// so the delete propagates across devices; all reads filter `tombstoned == false`.
+    var tombstoned: Bool = false
+    /// Local dirty flag: set on any local write, cleared once the push is confirmed.
+    var needsSync: Bool = false
+
     init(name: String, grade: String, holds: [HoldAssignment], createdAt: Date = Date()) {
+        self.id = UUID()
         self.name = name
         self.grade = grade
         self.holds = holds

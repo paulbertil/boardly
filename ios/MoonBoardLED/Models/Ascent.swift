@@ -38,6 +38,22 @@ final class Ascent {
     /// multi-board support — back-fill to the Mini via lightweight migration.
     var boardLayoutId: Int = 7
 
+    /// Stable link to a user-created `Problem`, when this ascent is for one. nil for
+    /// catalog ascents (which link via `sourceCatalogID`) and legacy user-problem
+    /// ascents until backfilled. The denormalized snapshot above still stands on its
+    /// own if the linked problem is later deleted.
+    var userProblemID: UUID?
+
+    // MARK: Sync metadata (cloud logbook sync)
+    /// Server-authoritative last-write timestamp, mirrored down from the cloud. nil
+    /// until the row has round-tripped through sync (legacy/local-only rows).
+    var updatedAt: Date?
+    /// Soft-delete tombstone. Deleting an ascent sets this instead of removing the row,
+    /// so the delete propagates across devices; all reads filter `tombstoned == false`.
+    var tombstoned: Bool = false
+    /// Local dirty flag: set on any local write, cleared once the push is confirmed.
+    var needsSync: Bool = false
+
     init(date: Date = Date(),
          sourceCatalogID: String? = nil,
          problemName: String,
@@ -47,8 +63,13 @@ final class Ascent {
          stars: Int = 0,
          comment: String = "",
          sent: Bool = true,
-         boardLayoutId: Int = 7) {
-        self.id = UUID()
+         boardLayoutId: Int = 7,
+         userProblemID: UUID? = nil,
+         id: UUID? = nil) {
+        // Sends get a random UUID (repeats are first-class). Unsent same-day attempt
+        // rows pass a DETERMINISTIC id (AscentSyncID.attemptID) so two devices
+        // converge on one row — see KTD5.
+        self.id = id ?? UUID()
         self.date = date
         self.sourceCatalogID = sourceCatalogID
         self.problemName = problemName
@@ -59,6 +80,7 @@ final class Ascent {
         self.comment = comment
         self.sent = sent
         self.boardLayoutId = boardLayoutId
+        self.userProblemID = userProblemID
     }
 
     /// How the voted grade compares to the official grade: +1 harder, -1 softer, 0 same/unknown.
