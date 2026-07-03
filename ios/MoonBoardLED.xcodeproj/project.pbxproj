@@ -3,15 +3,29 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 70;
+	objectVersion = 71;
 	objects = {
+
+/* Begin PBXBuildFile section */
+		C67A50AB2FF6B6E9001FF157 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = C67A50AA2FF6B6E9001FF157 /* Supabase */; };
+/* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		1A0000000000000000000006 /* MoonBoardLED.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MoonBoardLED.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		C67A50AF2FF6BA47001FF157 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 1A0000000000000000000005 /* MoonBoardLED */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		1A0000000000000000000004 /* MoonBoardLED */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = MoonBoardLED; sourceTree = "<group>"; };
+		1A0000000000000000000004 /* MoonBoardLED */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (C67A50AF2FF6BA47001FF157 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = MoonBoardLED; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -19,6 +33,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C67A50AB2FF6B6E9001FF157 /* Supabase in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -89,6 +104,9 @@
 			);
 			mainGroup = 1A0000000000000000000002;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				C67A50A92FF6B6E9001FF157 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+			);
 			productRefGroup = 1A0000000000000000000003 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -168,6 +186,8 @@
 		};
 		1A000000000000000000000E /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = 1A0000000000000000000004 /* MoonBoardLED */;
+			baseConfigurationReferenceRelativePath = Supabase.xcconfig;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -176,6 +196,7 @@
 				DEVELOPMENT_TEAM = 5A2NHZ6F8X;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = MoonBoardLED/Info.plist;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Connects to your MoonBoard LED controller to light up problems.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -198,6 +219,8 @@
 		};
 		1A000000000000000000000F /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = 1A0000000000000000000004 /* MoonBoardLED */;
+			baseConfigurationReferenceRelativePath = Supabase.xcconfig;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -206,6 +229,7 @@
 				DEVELOPMENT_TEAM = 5A2NHZ6F8X;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = MoonBoardLED/Info.plist;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Connects to your MoonBoard LED controller to light up problems.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -248,6 +272,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		C67A50A92FF6B6E9001FF157 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase/supabase-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.5.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		C67A50AA2FF6B6E9001FF157 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C67A50A92FF6B6E9001FF157 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 1A0000000000000000000001 /* Project object */;
 }

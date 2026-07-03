@@ -72,6 +72,10 @@ struct RootTabView: View {
         }
         .environment(router)
         .preferredColorScheme(appearance.colorScheme)
+        // First-run profile setup is presented by SettingsView, the single owner of
+        // the sign-in → profile-setup flow. Presenting it here as well raced with that
+        // sheet (both targeting the same presenting controller during the sign-in
+        // transition), so it lives in exactly one place now.
     }
 }
 
