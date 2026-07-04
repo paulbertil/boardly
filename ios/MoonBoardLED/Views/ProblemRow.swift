@@ -9,6 +9,8 @@ struct ProblemRow<Trailing: View>: View {
     var isBenchmark: Bool = false
     var isSent: Bool = false
     var isFavorite: Bool = false
+    /// Whether this problem is in the active collaborative list's shared pile.
+    var inPile: Bool = false
     /// When set, a small non-interactive board thumbnail is shown on the left.
     var holds: [HoldAssignment]? = nil
     /// Which board's art to render the thumbnail with.
@@ -45,6 +47,10 @@ struct ProblemRow<Trailing: View>: View {
                             if isFavorite {
                                 Image(systemName: "heart.fill")
                                     .font(.caption).foregroundStyle(.pink)
+                            }
+                            if inPile {
+                                Image(systemName: "tray.and.arrow.down.fill")
+                                    .font(.caption).foregroundStyle(Color.accentColor)
                             }
                         }
                     }

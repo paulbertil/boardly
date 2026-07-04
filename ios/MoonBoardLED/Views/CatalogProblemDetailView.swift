@@ -71,6 +71,8 @@ struct CatalogProblemRow: View {
     /// Per-person group status badges (handle + color), shown under the row in the
     /// collaborative-list lens (U2). nil in solo mode — the row renders exactly as before.
     var groupBadges: [(handle: String, color: Color)]? = nil
+    /// Whether this problem is already in the active list's shared pile (shows a glyph).
+    var inPile: Bool = false
 
     var body: some View {
         if let groupBadges, !groupBadges.isEmpty {
@@ -93,6 +95,7 @@ struct CatalogProblemRow: View {
             isBenchmark: problem.isBenchmark,
             isSent: isSent,
             isFavorite: isFavorite,
+            inPile: inPile,
             holds: showPreview ? problem.holdAssignments : nil,
             setup: setup,
             visibleHoldSetIDs: visibleHoldSetIDs,
@@ -140,6 +143,7 @@ struct GradePill: View {
 struct CatalogProblemPager: View {
     @EnvironmentObject private var ble: MoonBoardBLEManager
     @EnvironmentObject private var sync: LogbookSyncManager
+    @EnvironmentObject private var lists: ListsManager
     @Environment(\.modelContext) private var context
     @Query private var favorites: [FavoriteProblem]
     @AppStorage private var flipped: Bool
@@ -164,6 +168,10 @@ struct CatalogProblemPager: View {
     /// UserDefaults key under which to record the last problem shown, or nil when
     /// this pager shouldn't record (logbook). Derived from `Source`.
     private let recentKey: String?
+    /// The collaborative list whose pile this pager can add/remove the current problem to,
+    /// when opened in a list context (catalog lens or a list's pile). nil = no pile button
+    /// (e.g. the logbook, or the solo catalog with no active list).
+    let pileListId: UUID?
     @State private var currentID: String?
     @State private var showingLog = false
     /// Un-saved tries tapped via "Add try", and the problem they belong to.
@@ -176,11 +184,13 @@ struct CatalogProblemPager: View {
     @State private var litProblemID: String?
 
     init(problems: [CatalogProblem], current: CatalogProblem, board: Board, source: Source,
-         visibleHoldSetIDs: Set<Int>? = nil, selectedHolds: Set<String> = []) {
+         visibleHoldSetIDs: Set<Int>? = nil, selectedHolds: Set<String> = [],
+         pileListId: UUID? = nil) {
         self.problems = problems
         self.board = board
         self.visibleHoldSetIDs = visibleHoldSetIDs
         self.selectedHolds = selectedHolds
+        self.pileListId = pileListId
         switch source {
         case .catalog(let angle): self.recentKey = "catalogRecentProblems_\(board.id)_\(angle)"
         case .logbook:            self.recentKey = nil
@@ -195,6 +205,43 @@ struct CatalogProblemPager: View {
 
     private var currentProblem: CatalogProblem? {
         currentIndex.map { problems[$0] } ?? problems.first
+    }
+
+    /// The list this pager can add/remove to — only when a `pileListId` was passed AND the
+    /// loaded detail slot matches it on this board, so `lists.pile` genuinely reflects it.
+    private var pileList: ListRow? {
+        guard let id = pileListId,
+              let current = lists.currentList,
+              current.id == id,
+              current.board_layout_id == board.id else { return nil }
+        return current
+    }
+
+    /// Whether the on-screen problem is already in `pileList`'s shared pile.
+    private var currentInPile: Bool {
+        guard let pid = currentProblem?.id else { return false }
+        return lists.pile.contains { $0.source_catalog_id == pid }
+    }
+
+    /// Toggle the on-screen problem in the list's pile (add when absent, remove when present),
+    /// then reload the pile so the button and any list view reflect it.
+    private func togglePile(_ list: ListRow) async {
+        guard let p = currentProblem else { return }
+        do {
+            if let row = lists.pile.first(where: { $0.source_catalog_id == p.id }) {
+                // removeProblem soft-deletes without refreshing published state; reload so the
+                // button (and any list view) reflects it. addProblem already reloads internally
+                // when currentList matches — which pileList's guard guarantees — so the add
+                // branch needs no explicit reload.
+                try await lists.removeProblem(row.id)
+                try await lists.reloadPile(list.id)
+            } else {
+                try await lists.addProblem(listId: list.id, sourceCatalogID: p.id,
+                                           boardLayoutId: board.id)
+            }
+        } catch {
+            // A failed pile edit is non-fatal here; the button state just stays as-is.
+        }
     }
 
     var body: some View {
@@ -267,6 +314,17 @@ struct CatalogProblemPager: View {
                     toggleFavorite()
                 }
                 .disabled(currentProblem == nil)
+
+                // Add/remove the on-screen problem to the active list's shared pile — only
+                // shown when opened in a list context (catalog lens or a list's pile).
+                if let pileList {
+                    circleButton(systemName: currentInPile ? "tray.and.arrow.down.fill" : "tray.and.arrow.down",
+                                 tint: currentInPile ? .accentColor : .primary,
+                                 active: currentInPile) {
+                        Task { await togglePile(pileList) }
+                    }
+                    .disabled(currentProblem == nil)
+                }
 
                 Spacer()
 

@@ -292,8 +292,15 @@ struct CatalogListView: View {
     /// so the filter and badges are pure no-ops in solo/just-me mode.
     private var groupStatus: [UUID: MemberStatus] { groupFilterActive ? lists.groupStatus : [:] }
 
-    /// The group selection actually applied (empty unless the group filter is on).
-    private var appliedGroupSelection: Set<GroupChip> { groupFilterActive ? groupSelection : [] }
+    /// The group selection actually applied (empty unless the group filter is on). Chips are
+    /// filtered to the current roster: a chip for a member who has left (or lingered from a
+    /// previously-viewed list) would AND to zero matches in `GroupFilter.passes` and silently
+    /// blank the catalog, so drop it and let the filter relax instead.
+    private var appliedGroupSelection: Set<GroupChip> {
+        guard groupFilterActive else { return [] }
+        let memberIDs = Set(lists.members.map(\.id))
+        return groupSelection.filter { memberIDs.contains($0.memberID) }
+    }
 
     /// Recompute token for the group lens — folds selection + a status fingerprint so
     /// toggling chips or refreshing group status re-runs the off-main filter.
@@ -325,6 +332,19 @@ struct CatalogListView: View {
     /// Catalog ids already in the active list's pile (U3), so a swipe-add on an
     /// already-added problem is suppressed.
     private var pileIDs: Set<String> { Set(lists.pile.map(\.source_catalog_id)) }
+
+    /// The live pile row for a catalog id, if it's currently in the pile — used to flip the
+    /// swipe action to Remove and to target `removeProblem` (which keys off the pile row id).
+    private func pileRow(for catalogID: String) -> ListProblemRow? {
+        lists.pile.first { $0.source_catalog_id == catalogID }
+    }
+
+    /// Remove a problem from the shared pile, then reload — `removeProblem` doesn't refresh
+    /// published state on its own (unlike `addProblem`).
+    private func removeFromPile(_ listProblemID: UUID) async throws {
+        try await lists.removeProblem(listProblemID)
+        if let list = activeList { try await lists.reloadPile(list.id) }
+    }
 
     /// Snapshot all filter inputs, then filter + sort off the main thread.
     /// Everything here is a value type (or the pre-resolved `membership`
@@ -615,7 +635,8 @@ struct CatalogListView: View {
                                                       showPreview: showClimbPreviews,
                                                       setup: board.setup,
                                                       visibleHoldSetIDs: renderIDs,
-                                                      groupBadges: groupBadges(for: problem.id))
+                                                      groupBadges: groupBadges(for: problem.id),
+                                                      inPile: lensActive && pileIDs.contains(problem.id))
                                         .contentShape(Rectangle())
                                 }
                                 .buttonStyle(.plain)
@@ -625,23 +646,31 @@ struct CatalogListView: View {
                                         visibleLimit += Self.pageSize
                                     }
                                 }
-                                // Group lens: swipe-left to add this problem to the shared
-                                // pile (U3). Only present in lens mode and only when the
-                                // problem isn't already in the pile; solo rows are unaffected.
+                                // Group lens: swipe-left to toggle this problem in the shared
+                                // pile (U3) — Add when it's not in the pile, Remove when it is.
+                                // Only present in lens mode; solo rows are unaffected.
                                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                    if lensActive, let list = activeList, !pileIDs.contains(problem.id) {
-                                        Button {
-                                            Task {
-                                                try? await lists.addProblem(
-                                                    listId: list.id,
-                                                    sourceCatalogID: problem.id,
-                                                    boardLayoutId: board.id
-                                                )
+                                    if lensActive, let list = activeList {
+                                        if let inPile = pileRow(for: problem.id) {
+                                            Button(role: .destructive) {
+                                                Task { try? await removeFromPile(inPile.id) }
+                                            } label: {
+                                                Label("Remove", systemImage: "trash")
                                             }
-                                        } label: {
-                                            Label("Add", systemImage: "plus")
+                                        } else {
+                                            Button {
+                                                Task {
+                                                    try? await lists.addProblem(
+                                                        listId: list.id,
+                                                        sourceCatalogID: problem.id,
+                                                        boardLayoutId: board.id
+                                                    )
+                                                }
+                                            } label: {
+                                                Label("Add", systemImage: "plus")
+                                            }
+                                            .tint(.green)
                                         }
-                                        .tint(.green)
                                     }
                                 }
                             }
@@ -664,13 +693,23 @@ struct CatalogListView: View {
                 CatalogProblemPager(problems: list, current: problem,
                                     board: board, source: .catalog(angle: angle),
                                     visibleHoldSetIDs: renderIDs,
-                                    selectedHolds: selectedHolds)
+                                    selectedHolds: selectedHolds,
+                                    // Match the row's swipe/glyph suppression: no pile control
+                                    // in "Just me" view (lensActive false).
+                                    pileListId: lensActive ? activeList?.id : nil)
             }
             // A board tap on Home pops us back to the list (see TabRouter).
             .onChange(of: router.listResetToken) { _, _ in selectedProblem = nil }
             .onChange(of: filterSignature) { _, _ in visibleLimit = Self.pageSize }
             // Group-lens changes narrow the list too — reset pagination like any filter.
             .onChange(of: groupSignature) { _, _ in visibleLimit = Self.pageSize }
+            // Switching to a different active list starts clean in group view — don't carry
+            // the previous roster's chip selection (its members aren't here) or a stale
+            // "Just me" toggle.
+            .onChange(of: activeList?.id) { _, _ in
+                groupSelection = []
+                showMine = false
+            }
             .task {
                 guard loadedCatalog == nil else { return }
                 let resource = board.catalogResource(angle: angle)
