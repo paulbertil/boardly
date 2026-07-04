@@ -622,6 +622,39 @@ and `ListDetailView.swift`. No `ListsManager`/DTO/migration change — reuses th
   board-match guard keeps a stale `currentList` slot from mis-attributing a pile control on an
   unrelated board.
 
+### Lens lifecycle — no-leak + always-dismissible (post-U8) — 2026-07-04
+
+`activeListId` is a persistent global set only by "Browse & add" (`ListDetailView`) and
+cleared only by the group bar's "Leave" (or sign-out). The single-member change hides the
+group bar — and its "Leave" — for a solo list, so a solo "Browse & add" leaves the lens on
+forever, leaking the pile glyph/swipe/detail-button into *normal* catalog + detail browsing
+on that board. Fix the lifecycle so the lens is scoped to a deliberate browse session.
+
+- **Auto-clear on leaving the browse tab.** In `RootTabView`, add
+  `onChange(of: router.selection)` that sets `lists.activeListId = nil` whenever the
+  selection moves away from `.search`. `browseTogether` sets `activeListId` *then* routes to
+  `.search`, so entry never clears; switching to any other tab does. Clearing cascades:
+  `activeList` → nil → the existing `onChange(of: activeList?.id)` in `CatalogListView` resets
+  `groupSelection`/`showMine`. One hook, full reset. (`ProblemListView` is dead code; the live
+  catalog is only the Search tab.)
+- **Always-dismissible (solo exit).** `groupBarSection` renders whenever `activeList != nil`
+  (not only `isGroupList`): a multi-member list keeps the "Just me / [list]" picker + per-member
+  chips; a **solo list shows only a minimal exit** (list name + a "Leave" button) — no filter
+  UI, but never a dead end, so a solo browse can be ended in-place without a tab switch.
+- **Detail parity holds automatically.** The detail pile button already keys off
+  `pileListId = lensActive ? activeList?.id : nil` (catalog path), so once `activeListId` is
+  cleared the normal catalog and its detail show no pile control. The pile-tap pager (#4) is
+  unaffected — it passes `pileListId = listId` explicitly and never reads `activeListId`.
+- **Removal reflects in place (residual A).** With the pile-tap pager seeded from the frozen
+  `pagerPile` snapshot and the button reading live `lists.pile` via `currentInPile`, removing
+  the on-screen problem (by you, or seen after a refresh) flips the button to "Add" without
+  shrinking the pager or jumping — chosen over literal auto-dismiss (kicking the user out
+  mid-view is more jarring). Refresh-first means remote removals surface on the next refresh,
+  not mid-view. Verify; no code change expected.
+
+  Files: `RootTabView.swift` (auto-clear hook), `CatalogListView.swift` (solo exit in
+  `groupBarSection`). No `ListsManager`/DTO/migration change.
+
 ---
 
 ## Scope Boundaries
