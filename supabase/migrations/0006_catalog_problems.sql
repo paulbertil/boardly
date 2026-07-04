@@ -1,4 +1,6 @@
--- 0003_catalog_problems.sql
+-- 0006_catalog_problems.sql
+-- (Numbered 0006, not 0003: 0003-0005 are reserved for the in-flight collaborative-lists
+--  branch so the two don't collide when they merge.)
 -- The official MoonBoard problem catalog, promoted from bundled read-only JSON to a
 -- server-distributed table so every client (iOS, PWA, future Android) stays in sync
 -- instead of drifting on divergent bundles. This retires the previous arrangement in

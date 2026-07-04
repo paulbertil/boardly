@@ -6,7 +6,7 @@ a board. Pairs with [`../CONTEXT.md`](../CONTEXT.md) §"Importing official probl
 
 The catalog is **server-distributed**, not bundled: clients no longer ship the problem JSON.
 They download it lazily per board into a local cache and query it locally, so every client stays
-in sync instead of drifting on divergent bundles. See migration `supabase/migrations/0003_catalog_problems.sql`.
+in sync instead of drifting on divergent bundles. See migration `supabase/migrations/0006_catalog_problems.sql`.
 
 **Key files:** `scripts/fetch_boardsesh*.py` (fetch) + `scripts/import_catalog.py` (upload to
 Supabase), `MoonBoardLED/Catalog/Catalog.swift` (synced disk cache + loading),

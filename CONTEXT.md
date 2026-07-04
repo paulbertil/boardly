@@ -36,7 +36,7 @@ fully offline; sign-in and the first catalog sync need network.
 | `ios/` | **Primary app** — native SwiftUI + CoreBluetooth + SwiftData. Multi-board catalog, logbook, accounts. The live Xcode project is **`ios/MoonBoardLED.xcodeproj`**. |
 | `web/` | Companion **Web Bluetooth PWA** (Vite + React 19 + TS). Partial port: connect → build → light/clear. Catalog sync module (`src/catalog/catalogSync.ts`) added; no logbook yet. |
 | `shared/spec/` | **Markdown specs only** (BLE, geometry, data model). Not shared code — `web/` reimplements them in TS. |
-| `supabase/` | Postgres migrations backing accounts/profiles, the logbook, and the **catalog** (`0003_catalog_problems.sql`). |
+| `supabase/` | Postgres migrations backing accounts/profiles, the logbook, and the **catalog** (`0006_catalog_problems.sql`). |
 | `docs/` | Subsystem deep dives + index ([docs/README.md](docs/README.md)). |
 | `scripts/` | Python catalog fetchers + `import_catalog.py` (upload to Supabase) + board-art importers. |
 | `catalog-data/` | Staged board catalogs — the input to `scripts/import_catalog.py`, which upserts them into Supabase. |

@@ -1,6 +1,6 @@
 // Minimal Supabase REST access for the PWA.
 //
-// The problem catalog is public (migration 0003 grants anon SELECT on catalog_problems),
+// The problem catalog is public (migration 0006 grants anon SELECT on catalog_problems),
 // so we read it straight from PostgREST with the anon key — no @supabase/supabase-js
 // dependency needed for this read-only, unauthenticated path. Credentials come from the
 // same VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY env the rest of the app uses; when
