@@ -654,6 +654,10 @@ on that board. Fix the lifecycle so the lens is scoped to a deliberate browse se
 
   Files: `RootTabView.swift` (auto-clear hook), `CatalogListView.swift` (solo exit in
   `groupBarSection`). No `ListsManager`/DTO/migration change.
+- **Hide "Recently viewed" during a list browse.** The catalog's recently-viewed section is
+  gated on `activeList == nil`, so during a list browse (solo or multi, including "Just me"
+  view) the pile context isn't cluttered by personal recent history; it returns on the normal
+  catalog once the lens clears.
 
 ---
 

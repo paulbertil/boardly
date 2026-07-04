@@ -595,8 +595,10 @@ struct CatalogListView: View {
                         // Problems recently viewed for this board+angle, pinned above
                         // the list so you can jump back in. Ignores filters. Shows
                         // the most recent by default; the rest expand on demand.
+                        // Hidden during a list browse (activeList != nil) so the pile
+                        // context isn't cluttered by your personal recent history.
                         let recents = recentProblems
-                        if !recents.isEmpty {
+                        if activeList == nil, !recents.isEmpty {
                             Section {
                                 ForEach(recentExpanded ? recents : Array(recents.prefix(2))) { recent in
                                     Button {
