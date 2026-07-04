@@ -188,11 +188,11 @@ private struct CreateListSheet: View {
                         Text("Add a board on the Home tab to create a list.")
                             .foregroundStyle(.secondary)
                     } else {
-                        ForEach(addedBoards) { board in
-                            BoardPickerCard(board: board, isSelected: board.id == boardId) {
-                                boardId = board.id
-                            }
-                        }
+                        // Wrapped in an Equatable child so typing in the Name field (which
+                        // invalidates this whole sheet's body) doesn't re-render the board
+                        // cards / their BoardImageViews on every keystroke.
+                        BoardPickerSection(boards: addedBoards, selectedId: $boardId)
+                            .equatable()
                     }
                 }
                 if let error {
@@ -305,13 +305,40 @@ private struct CreateListSheet: View {
     }
 }
 
+/// The list of selectable board cards, isolated behind `Equatable` so it only re-renders
+/// when the added-board set or the selection actually changes — not on every Name-field
+/// keystroke (which invalidates the parent sheet's body). Equality deliberately ignores
+/// the `selectedId` Binding's identity and compares the current values.
+private struct BoardPickerSection: View, Equatable {
+    let boards: [Board]
+    @Binding var selectedId: Int
+
+    static func == (a: BoardPickerSection, b: BoardPickerSection) -> Bool {
+        a.selectedId == b.selectedId && a.boards.map(\.id) == b.boards.map(\.id)
+    }
+
+    var body: some View {
+        ForEach(boards) { board in
+            BoardPickerCard(board: board, isSelected: board.id == selectedId) {
+                selectedId = board.id
+            }
+            .equatable()
+        }
+    }
+}
+
 /// A selectable board card for the create-list sheet — the same thumbnail + name as the
 /// Home tab's board rows (rendering only the board's active hold sets), with a selection
-/// checkmark instead of the navigation chevron.
-private struct BoardPickerCard: View {
+/// checkmark instead of the navigation chevron. `Equatable` (on board + selection, not the
+/// tap closure) so SwiftUI can skip re-rendering unchanged cards.
+private struct BoardPickerCard: View, Equatable {
     let board: Board
     let isSelected: Bool
     let onTap: () -> Void
+
+    static func == (a: BoardPickerCard, b: BoardPickerCard) -> Bool {
+        a.board.id == b.board.id && a.isSelected == b.isSelected
+    }
     @AppStorage private var activeCSV: String
     @AppStorage private var angle: Int
 
