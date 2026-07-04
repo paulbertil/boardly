@@ -13,6 +13,7 @@ struct ListDetailView: View {
     @State private var renameText = ""
     @State private var actionError: String?
     @State private var selected: CatalogProblem?
+    @State private var showingBrowse = false
 
     private var list: ListRow? {
         lists.currentList?.id == listId ? lists.currentList : lists.myLists.first { $0.id == listId }
@@ -32,20 +33,31 @@ struct ListDetailView: View {
     var body: some View {
         List {
             Section {
-                NavigationLink {
-                    CatalogListView(board: board, angle: board.defaultAngle, addToListId: listId)
+                // A full-screen cover (its own NavigationStack) rather than a push: the
+                // catalog declares its own navigationDestination for CatalogProblem, which
+                // would collide with this view's pile destination in the same stack.
+                Button {
+                    showingBrowse = true
                 } label: {
-                    Label {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Browse problems")
-                            Text(board.name)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                    HStack {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Browse problems")
+                                Text(board.name)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "magnifyingglass")
                         }
-                    } icon: {
-                        Image(systemName: "magnifyingglass")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.tertiary)
                     }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
             }
             Section("Problems") {
                 if items.isEmpty {
@@ -86,6 +98,16 @@ struct ListDetailView: View {
         }
         .refreshable { await load() }
         .task { await load() }
+        .fullScreenCover(isPresented: $showingBrowse, onDismiss: { Task { await load() } }) {
+            NavigationStack {
+                CatalogListView(board: board, angle: board.defaultAngle, addToListId: listId)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button("Done") { showingBrowse = false }
+                        }
+                    }
+            }
+        }
         .alert("Rename list", isPresented: $renaming) {
             TextField("Name", text: $renameText)
             Button("Save") { Task { await rename() } }
