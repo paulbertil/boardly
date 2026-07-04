@@ -1,7 +1,9 @@
 import Foundation
 
-/// Read-only catalog of official Mini MoonBoard 2025 problems, loaded from the
-/// bundled `MiniMoonBoard2025Catalog.json` (produced by `scripts/fetch_mini2025.py`).
+/// Read-only catalog of official MoonBoard problems for one board+angle "slab",
+/// loaded from a synced on-disk cache (`Catalog.cacheDirectory`) that
+/// `CatalogSyncManager` populates from Supabase. The catalog is server-distributed —
+/// no longer bundled — so every client stays in sync (see docs/catalog-data-pipeline.md).
 ///
 /// This is deliberately kept separate from the user's own SwiftData `Problem`s:
 /// the catalog is browse-and-light only, never edited or persisted.
@@ -19,8 +21,10 @@ struct Catalog: Decodable {
     private static var cache: [String: Catalog] = [:]
     private static let cacheLock = NSLock()
 
-    /// Load a bundled catalog by resource name (e.g. "MiniMoonBoard2025Catalog",
-    /// "MoonBoardMasters2019Catalog_40"). Returns an empty catalog if missing.
+    /// Load a catalog slab by resource name (e.g. "MiniMoonBoard2025Catalog",
+    /// "MoonBoardMasters2019Catalog_40") from the synced disk cache. Returns an empty
+    /// catalog if the slab hasn't synced yet (first launch / offline / unconfigured) —
+    /// a later `CatalogSyncManager` pull writes it and invalidates this entry.
     /// Decoding is heavy (thousands of problems) — call it off the main thread.
     static func load(resource: String) -> Catalog {
         cacheLock.lock()
@@ -29,17 +33,61 @@ struct Catalog: Decodable {
         if let cached { return cached }
 
         let catalog: Catalog
-        if let url = Bundle.main.url(forResource: resource, withExtension: "json"),
-           let data = try? Data(contentsOf: url) {
+        if let data = try? Data(contentsOf: cacheURL(for: resource)) {
             catalog = parse(data) ?? .empty
         } else {
-            assertionFailure("Missing catalog: \(resource)")
+            // Slab not synced yet; return empty. Not an error now that the catalog is
+            // server-distributed — the first sync populates the cache.
             catalog = .empty
         }
         cacheLock.lock()
         cache[resource] = catalog
         cacheLock.unlock()
         return catalog
+    }
+
+    // MARK: - Synced disk cache
+
+    /// Directory holding synced catalog slabs, one JSON file per board+angle resource
+    /// (e.g. `Application Support/CatalogCache/MoonBoard2016Catalog_40.json`). Replaces
+    /// the app bundle as the catalog source now that the catalog is server-distributed.
+    static let cacheDirectory: URL = {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let dir = base.appendingPathComponent("CatalogCache", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }()
+
+    static func cacheURL(for resource: String) -> URL {
+        cacheDirectory.appendingPathComponent("\(resource).json")
+    }
+
+    /// Drop a slab's in-memory cache so the next `load` re-reads it from disk. Called by
+    /// `CatalogSyncManager` after it writes fresh rows.
+    static func invalidate(resource: String) {
+        cacheLock.lock()
+        cache[resource] = nil
+        cacheLock.unlock()
+    }
+
+    /// A slab's problems as raw `JSONSerialization` dicts (`{id,name,…,holds:[{c,r,t}]}`),
+    /// or `[]` if the slab isn't on disk yet. Lets `CatalogSyncManager` merge deltas in
+    /// the dict domain the parser already speaks, with no Codable round-trip.
+    static func rawProblems(resource: String) -> [[String: Any]] {
+        guard let data = try? Data(contentsOf: cacheURL(for: resource)),
+              let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            return []
+        }
+        return root["problems"] as? [[String: Any]] ?? []
+    }
+
+    /// Atomically write a slab's problems to disk in the same shape the bundle files used
+    /// (so `parse` reads them unchanged), then invalidate the in-memory cache.
+    static func writeSlab(problems: [[String: Any]], setup: String, resource: String) {
+        let root: [String: Any] = ["setup": setup, "count": problems.count, "problems": problems]
+        guard let data = try? JSONSerialization.data(withJSONObject: root) else { return }
+        try? data.write(to: cacheURL(for: resource), options: .atomic)
+        invalidate(resource: resource)
     }
 
     /// Warm the in-process cache for a catalog on a background thread so the first

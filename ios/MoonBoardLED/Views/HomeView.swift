@@ -126,7 +126,12 @@ struct HomeView: View {
             // screen, so tapping a board opens its list instantly instead of showing
             // a parse spinner. No-op once the caches are warm.
             .task(id: addedCSV) {
+                // Sync each added board's slabs from the server (lazy per board — this
+                // fires whenever a board is added or activated, since both change
+                // `addedCSV`), then warm the in-memory cache so tapping a board opens
+                // instantly. Sync no-ops offline; preload reads whatever slab is cached.
                 for board in addedBoards {
+                    await CatalogSyncManager.shared.syncBoard(board)
                     for angle in board.angles {
                         Catalog.preload(resource: board.catalogResource(angle: angle))
                     }

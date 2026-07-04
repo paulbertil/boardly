@@ -142,13 +142,32 @@ enum AddedBoards {
     }
 }
 
-/// Resolves a logged ascent's `sourceCatalogID` back to its board + problem, across
-/// every bundled board/angle, so the logbook can render and navigate any ascent
-/// regardless of which board it came from. Built once.
+/// Resolves a logged ascent's `sourceCatalogID` back to its board + problem, across every
+/// synced board/angle slab, so the logbook (and future collaborative lists) can render and
+/// navigate an ascent regardless of which board it came from.
+///
+/// Built lazily from the synced disk cache and cached until invalidated. Now that the
+/// catalog is server-distributed and synced lazily per board, an id only resolves once its
+/// slab has synced — `CatalogSyncManager` calls `invalidate()` after each pull so freshly
+/// synced ids start resolving. An un-synced id returns nil; ascents still render from their
+/// denormalized name/grade snapshot.
 enum CatalogIndex {
     struct Entry { let board: Board; let problem: CatalogProblem }
 
-    static let shared: [String: Entry] = {
+    private static var cache: [String: Entry]?
+    private static let lock = NSLock()
+
+    /// Drop the cached index so the next lookup rebuilds it from the current disk slabs.
+    static func invalidate() {
+        lock.lock()
+        cache = nil
+        lock.unlock()
+    }
+
+    private static func index() -> [String: Entry] {
+        lock.lock()
+        defer { lock.unlock() }
+        if let cache { return cache }
         var idx: [String: Entry] = [:]
         for board in Board.all {
             for angle in board.angles {
@@ -157,12 +176,13 @@ enum CatalogIndex {
                 }
             }
         }
+        cache = idx
         return idx
-    }()
+    }
 
     static func entry(forCatalogID id: String?) -> Entry? {
         guard let id else { return nil }
-        return shared[id]
+        return index()[id]
     }
 }
 

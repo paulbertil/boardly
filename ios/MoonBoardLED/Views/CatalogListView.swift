@@ -492,6 +492,10 @@ struct CatalogListView: View {
             .task {
                 guard loadedCatalog == nil else { return }
                 let resource = board.catalogResource(angle: angle)
+                // Ensure this slab is synced before loading. First open fetches it from
+                // the server; later opens read the cache. No-op offline/unconfigured —
+                // then `load` returns an empty catalog (the empty-state UI handles it).
+                await CatalogSyncManager.shared.syncSlab(layoutId: board.id, angle: angle)
                 loadedCatalog = await Task.detached(priority: .userInitiated) {
                     Catalog.load(resource: resource)
                 }.value

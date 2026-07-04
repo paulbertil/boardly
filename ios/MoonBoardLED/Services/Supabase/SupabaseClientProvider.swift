@@ -9,9 +9,14 @@ import Supabase
 /// anon key is public-safe — it only grants what Row-Level Security allows.
 ///
 /// When the values are absent (a fresh clone before setup), the app must still launch
-/// fully — the offline BLE / catalog / local-logbook experience never depends on auth.
-/// So config access is *optional* and never crashes; auth simply stays unavailable
-/// until `Supabase.xcconfig` is filled in (see docs/social-accounts-login-SETUP.md).
+/// fully — the offline BLE / local-logbook experience never depends on auth. So config
+/// access is *optional* and never crashes; auth simply stays unavailable until
+/// `Supabase.xcconfig` is filled in (see docs/social-accounts-login-SETUP.md).
+///
+/// Note: the problem catalog is now server-distributed (it syncs from Supabase into a
+/// local cache — see `CatalogSyncManager`), so unlike BLE/local-logbook it needs a
+/// configured client and one network sync per board before it has data. Browsing a
+/// board's catalog before that first sync shows an empty state, not bundled problems.
 enum SupabaseConfig {
     /// Custom URL scheme the OAuth / magic-link redirect returns to. Must match the
     /// URL Type registered on the target and the redirect URL allow-listed in the
