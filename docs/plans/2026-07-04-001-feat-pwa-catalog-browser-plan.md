@@ -206,7 +206,7 @@ flowchart TB
 - **Phase 4 — Browsing:** U8, U9 (list + recents, search/sort/filters/favorites).
 - **Phase 5 — Shell & light:** U10 (shell + navigation + first-run), U11 (detail pager + light-up + favorite).
 
-Phase 3's art pipeline (U6) is the highest-risk unit and the natural place to slip if asset export proves harder than assumed; U7 can fall back to a temporary programmatic render to keep Phases 4–5 unblocked (tracked in Open Questions).
+A vertical-slice-first sequencing (Mini 2025 browse+light end-to-end before broadening) was considered and declined for v1 — the horizontal, full-parity layering is the chosen order. Phase 3's art pipeline (U6) is the highest-risk unit and the natural place to slip if asset export proves harder than assumed; U7 can fall back to a temporary programmatic render to keep Phases 4–5 unblocked (tracked in Open Questions).
 
 ---
 
