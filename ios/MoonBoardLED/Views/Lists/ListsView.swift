@@ -156,13 +156,18 @@ private struct CreateListSheet: View {
     @State private var boardId = ActiveBoard.default
     @State private var isSaving = false
     @State private var error: String?
+    @State private var showingDatePicker = false
+    @State private var pickedDate = Date.now
 
     private var addedBoards: [Board] { AddedBoards.boards(from: addedCSV) }
 
-    /// Quick-fill name ideas — today's date plus a few common list purposes.
-    private var nameSuggestions: [String] {
-        let today = Date.now.formatted(.dateTime.month(.abbreviated).day())
-        return [today, "Projects", "To-do", "Warmups", "Ticklist", "Flashed"]
+    /// Quick-fill name ideas (the date is a separate pill that opens a calendar).
+    private var textSuggestions: [String] {
+        ["Projects", "To-do", "Warmups", "Flashed"]
+    }
+
+    private func dateLabel(_ date: Date) -> String {
+        date.formatted(date: .abbreviated, time: .omitted)
     }
 
     private var canCreate: Bool {
@@ -212,13 +217,30 @@ private struct CreateListSheet: View {
                         ?? boardId
                 }
             }
+            .sheet(isPresented: $showingDatePicker) {
+                datePickerSheet
+            }
         }
     }
 
     private var suggestionPills: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(nameSuggestions, id: \.self) { suggestion in
+                // Date pill — opens a calendar to pick any day.
+                Button { showingDatePicker = true } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "calendar")
+                        Text(dateLabel(pickedDate))
+                    }
+                    .font(.caption.weight(.medium))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color(.systemGray5), in: Capsule())
+                    .foregroundStyle(.primary)
+                }
+                .buttonStyle(.plain)
+
+                ForEach(textSuggestions, id: \.self) { suggestion in
                     Button {
                         name = suggestion
                     } label: {
@@ -235,6 +257,28 @@ private struct CreateListSheet: View {
             .padding(.vertical, 2)
         }
         .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 8, trailing: 16))
+    }
+
+    private var datePickerSheet: some View {
+        NavigationStack {
+            DatePicker("Date", selection: $pickedDate, displayedComponents: .date)
+                .datePickerStyle(.graphical)
+                .padding()
+                .navigationTitle("Pick a date")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { showingDatePicker = false }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Use date") {
+                            name = dateLabel(pickedDate)
+                            showingDatePicker = false
+                        }
+                    }
+                }
+        }
+        .presentationDetents([.medium, .large])
     }
 
     private func create() {
@@ -260,16 +304,23 @@ private struct BoardPickerCard: View {
     let isSelected: Bool
     let onTap: () -> Void
     @AppStorage private var activeCSV: String
+    @AppStorage private var angle: Int
 
     init(board: Board, isSelected: Bool, onTap: @escaping () -> Void) {
         self.board = board
         self.isSelected = isSelected
         self.onTap = onTap
         _activeCSV = AppStorage(wrappedValue: "", board.activeHoldSetsKey)
+        _angle = AppStorage(wrappedValue: board.defaultAngle, board.angleKey)
     }
 
-    private var renderIDs: Set<Int> {
-        ActiveHoldSets.visible(ActiveHoldSets.ids(from: activeCSV, in: board), in: board)
+    private var active: Set<Int> { ActiveHoldSets.ids(from: activeCSV, in: board) }
+    private var renderIDs: Set<Int> { ActiveHoldSets.visible(active, in: board) }
+
+    /// Hold sets and (for multi-angle boards) the angle — same subtitle the Home board rows show.
+    private var subtitle: String {
+        let sets = ActiveHoldSets.subtitle(active, in: board)
+        return board.hasAngleChoice ? "\(sets) · \(angle)°" : sets
     }
 
     var body: some View {
@@ -278,8 +329,13 @@ private struct BoardPickerCard: View {
                 BoardImageView(setup: board.setup, visibleHoldSetIDs: renderIDs)
                     .frame(width: 72)
                     .allowsHitTesting(false)
-                Text(board.name)
-                    .fontWeight(isSelected ? .semibold : .regular)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(board.name)
+                        .fontWeight(isSelected ? .semibold : .regular)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Spacer()
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
