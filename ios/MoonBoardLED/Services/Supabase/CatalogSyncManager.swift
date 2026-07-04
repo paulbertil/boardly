@@ -68,10 +68,8 @@ final class CatalogSyncManager {
             for p in Catalog.rawProblems(resource: resource) {
                 if let id = p["id"] as? String { byID[id] = p }
             }
-            var newest = SyncDate.date(cursor) ?? .distantPast
             for row in rows {
                 byID[row.source_catalog_id] = row.deleted ? nil : row.problemDict
-                if let ts = SyncDate.date(row.updated_at), ts > newest { newest = ts }
             }
 
             // Sort by (grade, name) to match the fetch script's on-disk ordering.
@@ -81,9 +79,15 @@ final class CatalogSyncManager {
                 return ($0["name"] as? String ?? "") < ($1["name"] as? String ?? "")
             }
             Catalog.writeSlab(problems: Array(problems), setup: board.name, resource: resource)
-            setCursor(SyncDate.string(newest), resource)
+            // Advance the cursor to the newest row's EXACT server timestamp. Rows are
+            // ordered by updated_at asc, so rows.last holds the high-water mark. Store the
+            // raw string (full microsecond precision) rather than round-tripping through
+            // SyncDate — that truncates to milliseconds, so `updated_at > cursor` would
+            // keep re-matching the boundary row on every refresh.
+            let newestCursor = rows.last?.updated_at ?? cursor
+            setCursor(newestCursor, resource)
             CatalogIndex.invalidate()   // newly-synced ids now resolve in the logbook / lists
-            print("[CatalogSync] \(resource): cached \(problems.count) problems; cursor now \(SyncDate.string(newest))")
+            print("[CatalogSync] \(resource): cached \(problems.count) problems; cursor now \(newestCursor)")
         } catch {
             // Offline or transient: leave the cursor + slab as-is; a later trigger retries.
             print("[CatalogSync] \(resource): sync failed (offline/transient) — \(error)")
