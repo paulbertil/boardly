@@ -16,6 +16,10 @@ struct ListDetailView: View {
 
     @State private var catalogByID: [String: CatalogProblem] = [:]
     @State private var actionError: String?
+    /// True once *this* view's `loadDetail` has resolved. `lists.members` is a single shared
+    /// array on the manager that still holds the previously-viewed list's roster until then,
+    /// so member-count-derived UI must not trust it before this flips.
+    @State private var membersLoaded = false
 
     private var list: ListRow? {
         lists.currentList?.id == listId ? lists.currentList : lists.myLists.first { $0.id == listId }
@@ -26,11 +30,18 @@ struct ListDetailView: View {
         return list.owner_id == me
     }
 
+    /// The owner is auto-seated as a member (DB trigger), so `members.count <= 1` means
+    /// nobody else has joined. Leaving a list you own with no other members is nonsensical —
+    /// the menu offers Delete only in that case. Gated on `membersLoaded` so a stale roster
+    /// from a previously-viewed list can't hide "Leave" (or worse, let a solo owner leave and
+    /// orphan) during the load window.
+    private var isSoloOwner: Bool { membersLoaded && isOwner && lists.members.count <= 1 }
+
     var body: some View {
         List {
             browseSection
-            inviteSection
             membersSection
+            inviteSection
             pileSection
         }
         .navigationTitle(list.map { $0.name.isEmpty ? "List" : $0.name } ?? "List")
@@ -38,10 +49,13 @@ struct ListDetailView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
-                    Button(role: .destructive) {
-                        Task { await leave() }
-                    } label: {
-                        Label("Leave list", systemImage: "rectangle.portrait.and.arrow.right")
+                    // A solo owner (only member) can't meaningfully "leave" — offer Delete only.
+                    if !isSoloOwner {
+                        Button(role: .destructive) {
+                            Task { await leave() }
+                        } label: {
+                            Label("Leave list", systemImage: "rectangle.portrait.and.arrow.right")
+                        }
                     }
                     if isOwner {
                         Button(role: .destructive) {
@@ -74,10 +88,10 @@ struct ListDetailView: View {
             Button {
                 Task { await browseTogether() }
             } label: {
-                Label("Browse together", systemImage: "person.2.wave.2")
+                Label("Browse & add problems", systemImage: "square.grid.2x2")
             }
         } footer: {
-            Text("Opens the catalog on this list's board with the group lens on — see who's sent/tried each problem and swipe to add.")
+            Text("Opens the catalog on this list's board — swipe to add problems and see each member's send/try status.")
         }
     }
 
@@ -107,7 +121,7 @@ struct ListDetailView: View {
                     Label("Share invite link", systemImage: "square.and.arrow.up")
                 }
             } footer: {
-                Text("Anyone with this link can join and share their send/try status with the group.")
+                Text("Anyone with this link can join this list and share their send/try status.")
             }
         }
     }
@@ -138,18 +152,28 @@ struct ListDetailView: View {
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(lists.pile) { item in
-                    if let problem = catalogByID[item.source_catalog_id] {
-                        // Same row component as the catalog's problem list, with the same
-                        // per-person group badges.
-                        CatalogProblemRow(
-                            problem: problem,
-                            isSent: myStatus?.sent.contains(item.source_catalog_id) ?? false,
-                            setup: board.setup,
-                            groupBadges: pileBadges(for: item.source_catalog_id)
-                        )
-                    } else {
-                        // Catalog not resolved yet — fall back to the raw id.
-                        Text(item.source_catalog_id).foregroundStyle(.secondary)
+                    Group {
+                        if let problem = catalogByID[item.source_catalog_id] {
+                            // Same row component as the catalog's problem list, with the same
+                            // per-person group badges.
+                            CatalogProblemRow(
+                                problem: problem,
+                                isSent: myStatus?.sent.contains(item.source_catalog_id) ?? false,
+                                setup: board.setup,
+                                groupBadges: pileBadges(for: item.source_catalog_id)
+                            )
+                        } else {
+                            // Catalog not resolved yet — fall back to the raw id.
+                            Text(item.source_catalog_id).foregroundStyle(.secondary)
+                        }
+                    }
+                    // Any member can curate the pile (all members equal) — swipe to remove.
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            Task { await removePileItem(item) }
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
                     }
                 }
             }
@@ -176,6 +200,7 @@ struct ListDetailView: View {
     private func refresh() async {
         do {
             try await lists.loadDetail(listId)
+            membersLoaded = true
             try await lists.refreshGroupStatus(listId: listId)
         } catch {
             actionError = error.localizedDescription
@@ -190,6 +215,18 @@ struct ListDetailView: View {
         var map: [String: CatalogProblem] = [:]
         for problem in catalog.problems { map[problem.id] = problem }
         catalogByID = map
+    }
+
+    /// Soft-delete a problem from the shared pile, then reload — `removeProblem` doesn't
+    /// refresh published state on its own (unlike `addProblem`), so the row must be
+    /// re-fetched for it to disappear.
+    private func removePileItem(_ item: ListProblemRow) async {
+        do {
+            try await lists.removeProblem(item.id)
+            try await lists.reloadPile(listId)
+        } catch {
+            actionError = error.localizedDescription
+        }
     }
 
     private func leave() async {
