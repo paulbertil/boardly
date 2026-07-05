@@ -14,6 +14,7 @@ struct ListsView: View {
     @EnvironmentObject private var lists: ListsManager
     @Query private var favorites: [FavoriteProblem]
     @AppStorage(ActiveBoard.storageKey) private var activeBoardId = ActiveBoard.default
+    @AppStorage(AddedBoards.storageKey) private var addedCSV = ""
 
     @State private var showingCreate = false
     @State private var renaming: ListRow?
@@ -21,6 +22,10 @@ struct ListsView: View {
     @State private var loadError: String?
 
     private var available: Bool { lists.isConfigured && auth.status != .signedOut }
+
+    /// Only offer the board switcher when there's more than one board to switch between —
+    /// with 0–1 boards the "Lists" title stays put (no phantom board header, no switcher).
+    private var canSwitchBoards: Bool { AddedBoards.boards(from: addedCSV).count > 1 }
 
     /// Your lists for the active board only. Lists on other boards still exist in the cloud —
     /// they're hidden until that board is active again.
@@ -39,9 +44,14 @@ struct ListsView: View {
                 }
             }
             .navigationTitle("Lists")
+            // Inline only when the switcher occupies the principal slot; otherwise keep the
+            // default large "Lists" title (mixing a principal item with a large title collides).
+            .navigationBarTitleDisplayMode(canSwitchBoards ? .inline : .large)
             .toolbar {
-                ToolbarItem(placement: .principal) {
-                    BoardSwitcher()
+                if canSwitchBoards {
+                    ToolbarItem(placement: .principal) {
+                        BoardSwitcher()
+                    }
                 }
                 if available {
                     ToolbarItem(placement: .primaryAction) {

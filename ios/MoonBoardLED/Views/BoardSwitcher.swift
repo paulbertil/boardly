@@ -51,6 +51,7 @@ struct BoardSwitcher: View {
             if canSwitch {
                 Image(systemName: "chevron.down")
                     .font(.caption2.weight(.semibold))
+                    .accessibilityHidden(true)
             }
         }
         .foregroundStyle(.primary)
