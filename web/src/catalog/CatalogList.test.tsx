@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { boardByLayoutId } from '../board/boards'
 import { CatalogList } from './CatalogList'
@@ -34,6 +34,8 @@ function slab(problems: CatalogProblem[], loading = false, degraded = false) {
 
 beforeEach(() => {
   localStorage.clear()
+  // Reset the reactive recentsStore cache (survives localStorage.clear()).
+  window.dispatchEvent(new StorageEvent('storage'))
   vi.clearAllMocks()
 })
 
@@ -88,5 +90,27 @@ describe('CatalogList', () => {
     slab([problem('a', '6A', 'Seen'), problem('b', '6B', 'Other')])
     render(<CatalogList board={board} angle={40} />)
     expect(screen.getByText('Recently viewed')).toBeInTheDocument()
+  })
+
+  it('reacts to a view recorded after mount (reactive recents)', () => {
+    slab([problem('a', '6A', 'Seen')])
+    render(<CatalogList board={board} angle={40} />)
+    expect(screen.queryByText('Recently viewed')).toBeNull()
+    act(() => recordRecent(7, 40, 'a'))
+    expect(screen.getByText('Recently viewed')).toBeInTheDocument()
+  })
+
+  it('applies a transform (filtered subset) and shows the filters-empty state', () => {
+    slab([problem('a', '6A', 'Keep'), problem('b', '7A', 'Drop')])
+    // transform keeps only 'Keep'
+    const keepOnly = (ps: CatalogProblem[]) => ps.filter((p) => p.name === 'Keep')
+    const { rerender } = render(<CatalogList board={board} angle={40} transform={keepOnly} />)
+    expect(screen.getByText('Keep')).toBeInTheDocument()
+    expect(screen.queryByText('Drop')).toBeNull()
+    expect(screen.getByText('1 problems')).toBeInTheDocument()
+
+    // A transform that excludes everything shows the distinct "no match" empty state.
+    rerender(<CatalogList board={board} angle={40} transform={() => []} />)
+    expect(screen.getByTestId('catalog-empty')).toHaveTextContent(/no problems match/i)
   })
 })

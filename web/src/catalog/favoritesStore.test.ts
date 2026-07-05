@@ -23,4 +23,12 @@ describe('favoritesStore', () => {
     act(() => result.current.toggleFavorite('x'))
     expect(result.current.favoriteIds.has('x')).toBe(true)
   })
+
+  it('picks up a favorite written by another tab via the storage event', () => {
+    const { result } = renderHook(() => useFavorites())
+    // Simulate another tab writing directly, then the browser firing 'storage'.
+    localStorage.setItem('catalogFavorites', JSON.stringify(['fromOtherTab']))
+    act(() => window.dispatchEvent(new StorageEvent('storage', { key: 'catalogFavorites' })))
+    expect(result.current.favoriteIds.has('fromOtherTab')).toBe(true)
+  })
 })

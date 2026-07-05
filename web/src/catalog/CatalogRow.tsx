@@ -41,24 +41,32 @@ export function CatalogRow({
         <div className="flex items-center gap-1.5">
           <span className="truncate font-medium uppercase">{problem.name}</span>
           {problem.is_benchmark && (
-            <BadgeCheck className="size-4 shrink-0 text-amber-500" aria-label="Benchmark" />
+            <BadgeCheck
+              role="img"
+              aria-label="Benchmark"
+              className="size-4 shrink-0 text-benchmark"
+            />
           )}
           {isFavorite && (
-            <Heart className="size-4 shrink-0 fill-pink-500 text-pink-500" aria-label="Favorite" />
+            <Heart
+              role="img"
+              aria-label="Favorite"
+              className="size-4 shrink-0 fill-favorite text-favorite"
+            />
           )}
         </div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
           {problem.stars > 0 && (
-            <span className="inline-flex items-center gap-0.5">
+            <span className="inline-flex shrink-0 items-center gap-0.5">
               <Star className="size-3.5" /> {problem.stars}
             </span>
           )}
           {problem.repeats > 0 && (
-            <span className="inline-flex items-center gap-0.5">
+            <span className="inline-flex shrink-0 items-center gap-0.5">
               <Repeat className="size-3.5" /> {problem.repeats}
             </span>
           )}
-          {problem.method && <span className="text-indigo-400">{problem.method}</span>}
+          {problem.method && <span className="truncate">{problem.method}</span>}
         </div>
         <div className="truncate text-sm text-muted-foreground">{subtitle}</div>
       </div>

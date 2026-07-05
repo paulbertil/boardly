@@ -1,6 +1,6 @@
 // The catalog filter/sort bar. Controlled: the parent owns FilterState (via
 // useFilters) and passes the slab's grade span + available methods. Built on
-// shadcn Input/Select/Slider/Button/Badge per web/CLAUDE.md.
+// shadcn Input/Select/Slider/Toggle/Button per web/CLAUDE.md.
 //
 // The drawn holds-filter picker (tap positions on the board) is intentionally
 // deferred — applyFilters supports the predicate, but its UI lands with the
@@ -15,7 +15,6 @@ import {
   type FilterState,
   type SortKey,
 } from './filters'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -26,6 +25,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
+import { Toggle } from '@/components/ui/toggle'
 
 const SORT_KEYS: SortKey[] = ['easiest', 'hardest', 'rated', 'repeats']
 
@@ -38,29 +38,20 @@ interface FilterControlsProps {
   methods: string[]
 }
 
-/** A pill that toggles a boolean filter. */
-function Toggle({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean
-  onClick: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <Button variant={active ? 'default' : 'outline'} size="sm" onClick={onClick}>
-      {children}
-    </Button>
-  )
-}
-
 export function FilterControls({ state, onChange, gradeSpan, methods }: FilterControlsProps) {
   const set = (patch: Partial<FilterState>) => onChange({ ...state, ...patch })
   const range = state.gradeRange ?? gradeSpan
   const secondaryOptions = SORT_KEYS.filter(
     (k) => sortDimension(k) !== sortDimension(state.sortPrimary),
   )
+
+  function changePrimary(primary: SortKey) {
+    // Drop a secondary that now shares the primary's dimension, so the Select
+    // never shows an orphaned value that isn't in its option list.
+    const keepSecondary =
+      state.sortSecondary && sortDimension(state.sortSecondary) !== sortDimension(primary)
+    set({ sortPrimary: primary, sortSecondary: keepSecondary ? state.sortSecondary : null })
+  }
 
   return (
     <div className="space-y-3 p-3">
@@ -71,7 +62,7 @@ export function FilterControls({ state, onChange, gradeSpan, methods }: FilterCo
       />
 
       <div className="flex gap-2">
-        <Select value={state.sortPrimary} onValueChange={(v) => set({ sortPrimary: v as SortKey })}>
+        <Select value={state.sortPrimary} onValueChange={(v) => changePrimary(v as SortKey)}>
           <SelectTrigger className="flex-1">
             <SelectValue />
           </SelectTrigger>
@@ -103,12 +94,13 @@ export function FilterControls({ state, onChange, gradeSpan, methods }: FilterCo
 
       <div>
         <div className="mb-1 flex justify-between text-xs text-muted-foreground">
-          <span>Grade</span>
+          <span id="grade-range-label">Grade</span>
           <span>
             {FONT_GRADES[range[0]]} – {FONT_GRADES[range[1]]}
           </span>
         </div>
         <Slider
+          aria-labelledby="grade-range-label"
           min={gradeSpan[0]}
           max={gradeSpan[1]}
           step={1}
@@ -121,16 +113,23 @@ export function FilterControls({ state, onChange, gradeSpan, methods }: FilterCo
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Toggle active={state.benchmarkOnly} onClick={() => set({ benchmarkOnly: !state.benchmarkOnly })}>
+        <Toggle
+          variant="outline"
+          size="sm"
+          pressed={state.benchmarkOnly}
+          onPressedChange={(v) => set({ benchmarkOnly: v })}
+        >
           Benchmarks
         </Toggle>
-        <Toggle active={state.favoritesOnly} onClick={() => set({ favoritesOnly: !state.favoritesOnly })}>
+        <Toggle
+          variant="outline"
+          size="sm"
+          pressed={state.favoritesOnly}
+          onPressedChange={(v) => set({ favoritesOnly: v })}
+        >
           Favorites
         </Toggle>
-        <Select
-          value={String(state.minStars)}
-          onValueChange={(v) => set({ minStars: Number(v) })}
-        >
+        <Select value={String(state.minStars)} onValueChange={(v) => set({ minStars: Number(v) })}>
           <SelectTrigger className="w-28">
             <SelectValue />
           </SelectTrigger>
@@ -147,25 +146,21 @@ export function FilterControls({ state, onChange, gradeSpan, methods }: FilterCo
 
       {methods.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
-          {methods.map((m) => {
-            const active = state.methods.includes(m)
-            return (
-              <Badge
-                key={m}
-                variant={active ? 'default' : 'outline'}
-                className="cursor-pointer"
-                onClick={() =>
-                  set({
-                    methods: active
-                      ? state.methods.filter((x) => x !== m)
-                      : [...state.methods, m],
-                  })
-                }
-              >
-                {m}
-              </Badge>
-            )
-          })}
+          {methods.map((m) => (
+            <Toggle
+              key={m}
+              variant="outline"
+              size="sm"
+              pressed={state.methods.includes(m)}
+              onPressedChange={(active) =>
+                set({
+                  methods: active ? [...state.methods, m] : state.methods.filter((x) => x !== m),
+                })
+              }
+            >
+              {m}
+            </Toggle>
+          ))}
         </div>
       )}
 

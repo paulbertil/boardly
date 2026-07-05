@@ -5,23 +5,21 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CatalogBoardDef } from '../board/boards'
-import { gradeIndex } from '../board/grades'
 import { useSlab } from './useSlab'
 import { CatalogRow } from './CatalogRow'
 import { RecentlyViewed } from './RecentlyViewed'
-import { clearRecents, getRecentIds } from './recentsStore'
+import { clearRecents, useRecents } from './recentsStore'
+import { DEFAULT_FILTERS, applyFilters, type FilterContext } from './filters'
 import type { CatalogProblem } from './catalogSync'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 
 const PAGE = 30
 
-/** Default ordering: easiest first by canonical grade, then name. */
-function byGradeThenName(a: CatalogProblem, b: CatalogProblem): number {
-  const ga = gradeIndex(a.grade)
-  const gb = gradeIndex(b.grade)
-  return ga === gb ? a.name.localeCompare(b.name) : ga - gb
-}
+// No-transform default: apply DEFAULT_FILTERS (all no-op filters + the default
+// grade sort) so the unfiltered list matches exactly what U9's transform yields
+// before any filter is set — the two "default sorts" can't drift.
+const DEFAULT_CONTEXT: FilterContext = { favoriteIds: new Set(), isClimbable: () => true }
 
 interface CatalogListProps {
   board: CatalogBoardDef
@@ -46,12 +44,13 @@ export function CatalogList({
   const sentinelRef = useRef<HTMLDivElement>(null)
 
   const displayed = useMemo(
-    () => (transform ? transform(problems) : [...problems].sort(byGradeThenName)),
+    () => (transform ? transform(problems) : applyFilters(problems, DEFAULT_FILTERS, DEFAULT_CONTEXT)),
     [problems, transform],
   )
 
-  // Reset pagination when the slab or the result set changes.
-  useEffect(() => setVisibleCount(PAGE), [board.layoutId, angle, transform])
+  // Reset pagination when the slab changes. Deliberately not keyed on `transform`:
+  // an inline transform ref would reset the count every render and pin it at PAGE.
+  useEffect(() => setVisibleCount(PAGE), [board.layoutId, angle])
 
   // Grow on scroll when the sentinel comes into view (button is the fallback).
   useEffect(() => {
@@ -64,12 +63,13 @@ export function CatalogList({
     return () => io.disconnect()
   }, [displayed.length])
 
+  const recentIds = useRecents(board.layoutId, angle)
   const recentProblems = useMemo(() => {
     const byId = new Map(problems.map((p) => [p.source_catalog_id, p]))
-    return getRecentIds(board.layoutId, angle)
+    return recentIds
       .map((id) => byId.get(id))
       .filter((p): p is CatalogProblem => p !== undefined)
-  }, [problems, board.layoutId, angle])
+  }, [problems, recentIds])
 
   const onSelectProblem = onSelect ?? (() => {})
 

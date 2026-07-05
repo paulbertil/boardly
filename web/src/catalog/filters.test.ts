@@ -57,6 +57,18 @@ describe('applyFilters — sort', () => {
     const list = [p({ source_catalog_id: 'e', grade: '6A' }), p({ source_catalog_id: 'h', grade: '8A' })]
     expect(ids(applyFilters(list, state({ sortPrimary: 'hardest' }), ctx))).toEqual(['h', 'e'])
   })
+
+  it('ignores a secondary sort that shares the primary dimension', () => {
+    // easiest + hardest are both the grade dimension: the secondary is dropped,
+    // so ties fall through to the name tiebreak (not a grade re-sort).
+    const list = [
+      p({ source_catalog_id: 'z', grade: '6A', name: 'Zebra' }),
+      p({ source_catalog_id: 'a', grade: '6A', name: 'Apple' }),
+    ]
+    expect(
+      ids(applyFilters(list, state({ sortPrimary: 'easiest', sortSecondary: 'hardest' }), ctx)),
+    ).toEqual(['a', 'z']) // name tiebreak, not hardest
+  })
 })
 
 describe('applyFilters — filters', () => {

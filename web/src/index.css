@@ -159,3 +159,11 @@ button:not(:disabled):hover {
     @apply font-sans;
   }
 }
+
+/* Fixed semantic colors for catalog iconography, mirroring iOS's role colors
+   (benchmark seal = amber, favorite heart = pink). Named tokens per web/CLAUDE.md
+   instead of ad-hoc Tailwind color-scale classes. */
+@theme {
+  --color-benchmark: oklch(0.77 0.16 75);
+  --color-favorite: oklch(0.65 0.22 5);
+}
