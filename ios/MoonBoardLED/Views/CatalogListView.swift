@@ -530,7 +530,9 @@ struct CatalogListView: View {
                 displayed = result
                 hasComputed = true
             }
-            .navigationTitle(board.name)
+            // The board name is shown by the BoardSwitcher in the principal slot below,
+            // so the static title is cleared to avoid a duplicate label.
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .top, spacing: 0) {
                 if filtersActive { activeFilterBar }
@@ -541,6 +543,9 @@ struct CatalogListView: View {
             // only *looks* anchored while the expanded scrim stretches the
             // ZStack full-screen — collapsed, it floats mid-screen.
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    BoardSwitcher()
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showClimbPreviews.toggle() } label: {
                         Image(systemName: showClimbPreviews ? "square.grid.2x2.fill" : "square.grid.2x2")
