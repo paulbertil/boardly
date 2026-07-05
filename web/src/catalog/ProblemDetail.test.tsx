@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { boardByLayoutId } from '../board/boards'
 import type { CatalogProblem } from './catalogSync'
@@ -36,19 +36,17 @@ function problem(id: string, name: string): CatalogProblem {
 
 const list = [problem('a', 'First'), problem('b', 'Middle'), problem('c', 'Last')]
 
-function renderDetail(index: number, onIndexChange = vi.fn()) {
-  render(
+function renderDetail(initialIndex: number, problems = list) {
+  return render(
     <ProblemDetail
-      problems={list}
-      index={index}
+      problems={problems}
+      initialIndex={initialIndex}
       board={board}
       angle={40}
       favoriteIds={new Set()}
-      onIndexChange={onIndexChange}
       onClose={vi.fn()}
     />,
   )
-  return { onIndexChange }
 }
 
 beforeEach(() => {
@@ -73,10 +71,28 @@ describe('ProblemDetail', () => {
     expect(screen.getByRole('button', { name: 'Next problem' })).toBeEnabled()
   })
 
-  it('pages forward via onIndexChange', () => {
-    const { onIndexChange } = renderDetail(1)
+  it('pages forward through the list', () => {
+    renderDetail(1)
     fireEvent.click(screen.getByRole('button', { name: 'Next problem' }))
-    expect(onIndexChange).toHaveBeenCalledWith(2)
+    expect(screen.getByText('Last')).toBeInTheDocument()
+  })
+
+  it('stays on the current problem if it leaves the filtered set', () => {
+    const { rerender } = renderDetail(1) // showing "Middle"
+    // Parent recomputes the list and drops "Middle" (e.g. unfavorited under a filter).
+    rerender(
+      <ProblemDetail
+        problems={[list[0], list[2]]}
+        initialIndex={1}
+        board={board}
+        angle={40}
+        favoriteIds={new Set()}
+        onClose={vi.fn()}
+      />,
+    )
+    expect(screen.getByText('Middle')).toBeInTheDocument() // did not jump
+    expect(screen.getByRole('button', { name: 'Previous problem' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Next problem' })).toBeDisabled()
   })
 
   it('records the viewed problem into recents', () => {
@@ -91,22 +107,37 @@ describe('ProblemDetail', () => {
     expect(isFavorite('b')).toBe(true)
   })
 
-  it('connects before sending when disconnected, and does not send if connect fails', () => {
+  it('connects before sending when disconnected, and does not send if connect fails', async () => {
     vi.mocked(ble.isConnected).mockReturnValue(false) // stays disconnected
     renderDetail(1)
-    fireEvent.click(screen.getByRole('button', { name: /connect & light up/i }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /connect & light up/i }))
+    })
     expect(ble.connectBoard).toHaveBeenCalled()
     expect(ble.bleClient.send).not.toHaveBeenCalled()
   })
 
-  it('sends the mapped holds when already connected', () => {
+  it('sends the mapped holds when already connected', async () => {
     vi.mocked(ble.useBle).mockReturnValue({ state: 'connected', deviceName: 'MB', error: null })
     vi.mocked(ble.isConnected).mockReturnValue(true)
     renderDetail(1)
-    fireEvent.click(screen.getByRole('button', { name: /light up/i }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /light up/i }))
+    })
     expect(ble.bleClient.send).toHaveBeenCalledWith(
       [{ col: 0, row: 1, type: 'start' }],
       expect.objectContaining({ rows: 12, showBeta: true }),
     )
+  })
+
+  it('surfaces a send error', async () => {
+    vi.mocked(ble.useBle).mockReturnValue({ state: 'connected', deviceName: 'MB', error: null })
+    vi.mocked(ble.isConnected).mockReturnValue(true)
+    vi.mocked(ble.bleClient.send).mockRejectedValueOnce(new Error('write failed'))
+    renderDetail(1)
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /light up/i }))
+    })
+    expect(screen.getByText('write failed')).toBeInTheDocument()
   })
 })

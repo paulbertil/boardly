@@ -43,11 +43,35 @@ describe('MyBoards', () => {
     expect(screen.getByRole('button', { name: '25°' })).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('removes an added board', () => {
+  it('toggles installed hold sets and blocks removing the last one', () => {
+    render(<MyBoards onActivated={() => {}} />)
+    // Add Mini 2025 (4 filterable hold sets, all installed by default).
+    const addRow = screen.getByText('Mini MoonBoard 2025').closest('div')!
+    fireEvent.click(within(addRow).getByRole('button', { name: 'Add' }))
+
+    // Mini 2025 has no angle choice, so the only aria-pressed toggles are the
+    // 4 installed hold sets.
+    const toggles = () => screen.getAllByRole('button').filter((b) => b.hasAttribute('aria-pressed'))
+    expect(toggles()).toHaveLength(4)
+    toggles().forEach((t) => expect(t).toHaveAttribute('aria-pressed', 'true'))
+
+    // Turn three off; the last remaining one is disabled (empty = "all" is not allowed).
+    fireEvent.click(toggles()[0])
+    fireEvent.click(toggles()[1])
+    fireEvent.click(toggles()[2])
+    const stillOn = toggles().filter((t) => t.getAttribute('aria-pressed') === 'true')
+    expect(stillOn).toHaveLength(1)
+    expect(stillOn[0]).toBeDisabled()
+  })
+
+  it('removes an added board after a confirm click', () => {
     render(<MyBoards onActivated={() => {}} />)
     fireEvent.click(screen.getAllByRole('button', { name: 'Add' })[0])
     expect(screen.getByText('My boards')).toBeInTheDocument()
+
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    expect(screen.getByText('My boards')).toBeInTheDocument() // first click just confirms
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm?' }))
     expect(screen.queryByText('My boards')).toBeNull() // back to first-run
   })
 })

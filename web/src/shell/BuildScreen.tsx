@@ -8,6 +8,7 @@ import { mini2025 } from '../board/config'
 import { BoardGrid, nextType } from '../components/BoardGrid'
 import { ConnectBar } from '../components/ConnectBar'
 import type { HoldAssignment } from '../types'
+import { Button } from '@/components/ui/button'
 
 // MVP authoring: single board, beta OFF (grid cycles start → move → end).
 const board = mini2025
@@ -58,11 +59,13 @@ export function BuildScreen() {
         onDisconnect={disconnectBoard}
       />
       <BoardGrid board={board} holds={holds} onToggle={toggleCell} />
-      <div className="actions">
-        <button onClick={lightUp} disabled={state !== 'connected'}>
+      <div className="flex gap-2">
+        <Button onClick={lightUp} disabled={state !== 'connected'}>
           Light up
-        </button>
-        <button onClick={clear}>Clear</button>
+        </Button>
+        <Button variant="secondary" onClick={clear}>
+          Clear
+        </Button>
       </div>
     </div>
   )

@@ -14,11 +14,17 @@ function App() {
   // My Boards to add one rather than showing an empty catalog.
   const effectiveView: NavView = addedBoards.length === 0 && view === 'catalog' ? 'boards' : view
 
+  const noBoards = addedBoards.length === 0
+
   return (
     <div className="app">
       <header className="flex items-center justify-between gap-2">
         <h1 className="text-lg font-bold">MoonBoard LED</h1>
-        <Navigation view={effectiveView} onNavigate={setView} />
+        <Navigation
+          view={effectiveView}
+          onNavigate={setView}
+          disabled={noBoards ? ['catalog'] : []}
+        />
       </header>
       {effectiveView === 'catalog' && <CatalogScreen />}
       {effectiveView === 'boards' && <MyBoards onActivated={() => setView('catalog')} />}

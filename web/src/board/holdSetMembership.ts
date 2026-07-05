@@ -111,3 +111,23 @@ export function activeCsv(ids: Set<number>, data: MembershipData): string {
 export function visibleSetIds(activeIds: Set<number>, data: MembershipData): Set<number> {
   return new Set([...activeIds, ...alwaysOnSetIds(data)])
 }
+
+/** Everything derived from a board's membership + its installed-set string, in
+ *  one place (CatalogScreen filtering, ProblemDetail render, MyBoards config). */
+export interface HoldSetContext {
+  membership: MembershipData
+  filterable: number[]
+  active: Set<number>
+  visible: Set<number>
+}
+
+export function holdSetContext(resource: string, activeRaw: string): HoldSetContext {
+  const membership = membershipFor(resource)
+  const active = activeSetIds(activeRaw, membership)
+  return {
+    membership,
+    filterable: filterableSetIds(membership),
+    active,
+    visible: visibleSetIds(active, membership),
+  }
+}

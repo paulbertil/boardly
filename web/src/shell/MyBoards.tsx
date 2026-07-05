@@ -2,14 +2,10 @@
 // configuration — angle and installed hold sets, which drive the catalog's slab
 // and climbable filtering. Also the first-run surface (zero added boards).
 
+import { useState } from 'react'
 import { BOARDS, hasAngleChoice, type CatalogBoardDef } from '../board/boards'
 import { getActiveHoldSetsRaw, getAngle, useBoardStore } from '../board/boardStore'
-import {
-  activeCsv,
-  activeSetIds,
-  filterableSetIds,
-  membershipFor,
-} from '../board/holdSetMembership'
+import { activeCsv, holdSetContext } from '../board/holdSetMembership'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -85,9 +81,11 @@ interface BoardCardProps {
 
 function BoardCard({ board, active, onActivate, onRemove, onAngle, onHoldSets }: BoardCardProps) {
   const angle = getAngle(board)
-  const membership = membershipFor(board.membershipResource)
-  const filterable = filterableSetIds(membership)
-  const installed = activeSetIds(getActiveHoldSetsRaw(board.layoutId), membership)
+  const { membership, filterable, active: installed } = holdSetContext(
+    board.membershipResource,
+    getActiveHoldSetsRaw(board.layoutId),
+  )
+  const [confirmRemove, setConfirmRemove] = useState(false)
 
   function toggleSet(id: number) {
     const next = new Set(installed)
@@ -117,8 +115,13 @@ function BoardCard({ board, active, onActivate, onRemove, onAngle, onHoldSets }:
               Browse
             </Button>
           )}
-          <Button size="sm" variant="ghost" onClick={onRemove}>
-            Remove
+          <Button
+            size="sm"
+            variant={confirmRemove ? 'destructive' : 'ghost'}
+            onClick={() => (confirmRemove ? onRemove() : setConfirmRemove(true))}
+            onBlur={() => setConfirmRemove(false)}
+          >
+            {confirmRemove ? 'Confirm?' : 'Remove'}
           </Button>
         </div>
       </CardHeader>
@@ -149,6 +152,8 @@ function BoardCard({ board, active, onActivate, onRemove, onAngle, onHoldSets }:
                   size="sm"
                   variant="outline"
                   pressed={installed.has(id)}
+                  // Can't remove the last installed set (empty = "all"); disable it.
+                  disabled={installed.size === 1 && installed.has(id)}
                   onPressedChange={() => toggleSet(id)}
                 >
                   {setName(id)}

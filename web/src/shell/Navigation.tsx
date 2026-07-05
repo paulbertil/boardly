@@ -14,9 +14,11 @@ const TABS: { view: NavView; label: string }[] = [
 interface NavigationProps {
   view: NavView
   onNavigate: (view: NavView) => void
+  /** Views that can't be reached yet (e.g. Catalog before a board is added). */
+  disabled?: NavView[]
 }
 
-export function Navigation({ view, onNavigate }: NavigationProps) {
+export function Navigation({ view, onNavigate, disabled = [] }: NavigationProps) {
   return (
     <nav className="flex gap-1" aria-label="Primary">
       {TABS.map((tab) => (
@@ -24,6 +26,8 @@ export function Navigation({ view, onNavigate }: NavigationProps) {
           key={tab.view}
           variant={view === tab.view ? 'default' : 'ghost'}
           size="sm"
+          disabled={disabled.includes(tab.view)}
+          title={disabled.includes(tab.view) ? 'Add a board first' : undefined}
           aria-current={view === tab.view ? 'page' : undefined}
           onClick={() => onNavigate(tab.view)}
         >

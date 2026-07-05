@@ -5,7 +5,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { FONT_GRADES, gradeIndex } from '../board/grades'
 import { getActiveHoldSetsRaw, getAngle, useBoardStore } from '../board/boardStore'
-import { activeSetIds, isClimbable, membershipFor } from '../board/holdSetMembership'
+import { holdSetContext, isClimbable } from '../board/holdSetMembership'
 import { CatalogList } from './CatalogList'
 import { FilterControls } from './FilterControls'
 import { ProblemDetail } from './ProblemDetail'
@@ -39,8 +39,7 @@ export function CatalogScreen() {
 
   // Installed-hold-set climbable check for the active board.
   const context = useMemo<FilterContext>(() => {
-    const membership = membershipFor(board.membershipResource)
-    const active = activeSetIds(getActiveHoldSetsRaw(board.layoutId), membership)
+    const { membership, active } = holdSetContext(board.membershipResource, getActiveHoldSetsRaw(board.layoutId))
     return { favoriteIds, isClimbable: (holds) => isClimbable(membership, holds, active) }
   }, [board, favoriteIds])
 
@@ -55,15 +54,14 @@ export function CatalogScreen() {
     if (i >= 0) setOpenIndex(i)
   }
 
-  if (openIndex !== null && displayed[openIndex]) {
+  if (openIndex !== null) {
     return (
       <ProblemDetail
         problems={displayed}
-        index={openIndex}
+        initialIndex={openIndex}
         board={board}
         angle={angle}
         favoriteIds={favoriteIds}
-        onIndexChange={setOpenIndex}
         onClose={() => setOpenIndex(null)}
       />
     )
