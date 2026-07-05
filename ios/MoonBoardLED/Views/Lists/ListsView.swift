@@ -22,11 +22,6 @@ struct ListsView: View {
 
     private var available: Bool { lists.isConfigured && auth.status != .signedOut }
 
-    /// The board the Lists tab is scoped to (the one the Search tab is browsing). Everything
-    /// on this page — your lists, the create sheet, and Favorites — is tied to it; switching
-    /// the active board on the Home tab swaps what's shown here. No cross-board mixing.
-    private var activeBoard: Board { Board.with(layoutId: activeBoardId) }
-
     /// Your lists for the active board only. Lists on other boards still exist in the cloud —
     /// they're hidden until that board is active again.
     private var boardLists: [ListRow] {
@@ -36,13 +31,7 @@ struct ListsView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    favoritesCard
-                } header: {
-                    // Read-only signal of which board this page is scoped to, so lists that
-                    // appear/disappear on a board switch don't read as "my lists vanished".
-                    Text(activeBoard.name)
-                }
+                Section { favoritesCard }
                 if available {
                     listSection
                 } else {
@@ -51,6 +40,9 @@ struct ListsView: View {
             }
             .navigationTitle("Lists")
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    BoardSwitcher()
+                }
                 if available {
                     ToolbarItem(placement: .primaryAction) {
                         Button { showingCreate = true } label: {
