@@ -14,6 +14,7 @@ struct ListsView: View {
     @EnvironmentObject private var lists: ListsManager
     @Query private var favorites: [FavoriteProblem]
     @AppStorage(ActiveBoard.storageKey) private var activeBoardId = ActiveBoard.default
+    @AppStorage(AddedBoards.storageKey) private var addedCSV = ""
 
     @State private var showingCreate = false
     @State private var renaming: ListRow?
@@ -22,10 +23,9 @@ struct ListsView: View {
 
     private var available: Bool { lists.isConfigured && auth.status != .signedOut }
 
-    /// The board the Lists tab is scoped to (the one the Search tab is browsing). Everything
-    /// on this page — your lists, the create sheet, and Favorites — is tied to it; switching
-    /// the active board on the Home tab swaps what's shown here. No cross-board mixing.
-    private var activeBoard: Board { Board.with(layoutId: activeBoardId) }
+    /// Only offer the board switcher when there's more than one board to switch between —
+    /// with 0–1 boards the "Lists" title stays put (no phantom board header, no switcher).
+    private var canSwitchBoards: Bool { AddedBoards.boards(from: addedCSV).count > 1 }
 
     /// Your lists for the active board only. Lists on other boards still exist in the cloud —
     /// they're hidden until that board is active again.
@@ -36,13 +36,7 @@ struct ListsView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    favoritesCard
-                } header: {
-                    // Read-only signal of which board this page is scoped to, so lists that
-                    // appear/disappear on a board switch don't read as "my lists vanished".
-                    Text(activeBoard.name)
-                }
+                Section { favoritesCard }
                 if available {
                     listSection
                 } else {
@@ -50,7 +44,15 @@ struct ListsView: View {
                 }
             }
             .navigationTitle("Lists")
+            // Inline only when the switcher occupies the principal slot; otherwise keep the
+            // default large "Lists" title (mixing a principal item with a large title collides).
+            .navigationBarTitleDisplayMode(canSwitchBoards ? .inline : .large)
             .toolbar {
+                if canSwitchBoards {
+                    ToolbarItem(placement: .principal) {
+                        BoardSwitcher()
+                    }
+                }
                 if available {
                     ToolbarItem(placement: .primaryAction) {
                         Button { showingCreate = true } label: {

@@ -150,7 +150,7 @@ private struct SearchTab: View {
 
     var body: some View {
         NavigationStack {
-            CatalogListView(board: board, angle: angle)
+            CatalogListView(board: board, angle: angle, showsBoardSwitcher: true)
         }
     }
 }
