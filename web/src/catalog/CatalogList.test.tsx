@@ -111,6 +111,17 @@ describe('CatalogList', () => {
     expect(screen.getByText('Recently viewed')).toBeInTheDocument()
   })
 
+  it('shows row thumbnails by default and hides them via the previews toggle', () => {
+    const { container } = renderList([problem('a', '6A', 'Alpha')])
+    expect(container.querySelector('.catalog-board')).not.toBeNull()
+    const toggle = screen.getByRole('button', { name: /hide climb previews/i })
+    act(() => {
+      fireEvent.click(toggle)
+    })
+    expect(container.querySelector('.catalog-board')).toBeNull()
+    expect(screen.getByRole('button', { name: /show climb previews/i })).toBeInTheDocument()
+  })
+
   it('applies a transform (filtered subset) and shows the filters-empty state', () => {
     const problems = [problem('a', '6A', 'Keep'), problem('b', '7A', 'Drop')]
     const keepOnly = (ps: CatalogProblem[]) => ps.filter((p) => p.name === 'Keep')

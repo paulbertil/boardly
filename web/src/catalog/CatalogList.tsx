@@ -5,14 +5,17 @@
 // `transform` prop (defaults to the grade-ordinal sort).
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { LayoutGrid } from 'lucide-react'
 import type { CatalogBoardDef } from '../board/boards'
 import { CatalogRow } from './CatalogRow'
 import { RecentlyViewed } from './RecentlyViewed'
 import { clearRecents, useRecents } from './recentsStore'
+import { toggleShowPreviews, useShowPreviews } from './previewsStore'
 import { DEFAULT_FILTERS, applyFilters, type FilterContext } from './filters'
 import type { CatalogProblem } from './catalogSync'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 
 const PAGE = 30
 
@@ -28,7 +31,6 @@ interface CatalogListProps {
   loading: boolean
   degraded: boolean
   favoriteIds?: Set<string>
-  showThumbnails?: boolean
   /** Filter/sort the slab's problems (U9). Defaults to grade-ordinal sort. */
   transform?: (problems: CatalogProblem[]) => CatalogProblem[]
   /** A search query is narrowing the list — hides "Recently viewed" and points
@@ -44,11 +46,11 @@ export function CatalogList({
   loading,
   degraded,
   favoriteIds = new Set(),
-  showThumbnails = false,
   transform,
   searchActive = false,
   onSelect,
 }: CatalogListProps) {
+  const showThumbnails = useShowPreviews()
   const [visibleCount, setVisibleCount] = useState(PAGE)
   const sentinelRef = useRef<HTMLDivElement>(null)
 
@@ -131,12 +133,26 @@ export function CatalogList({
           problems={recentProblems}
           board={board}
           favoriteIds={favoriteIds}
+          showThumbnails={showThumbnails}
           onSelect={onSelectProblem}
           onClear={() => clearRecents(board.layoutId, angle)}
         />
       )}
-      <div className="px-3 py-1 text-xs text-muted-foreground">
-        {displayed.length} problems
+      <div className="flex items-center justify-between px-3 py-1 text-xs text-muted-foreground">
+        <span>{displayed.length} problems</span>
+        <button
+          type="button"
+          onClick={toggleShowPreviews}
+          aria-pressed={showThumbnails}
+          aria-label={showThumbnails ? 'Hide climb previews' : 'Show climb previews'}
+          title={showThumbnails ? 'Hide climb previews' : 'Show climb previews'}
+          className={cn(
+            'flex size-7 items-center justify-center rounded-md transition-colors hover:bg-accent',
+            showThumbnails ? 'text-primary' : 'text-muted-foreground',
+          )}
+        >
+          <LayoutGrid className="size-4" />
+        </button>
       </div>
       {visible.map((p) => (
         <CatalogRow

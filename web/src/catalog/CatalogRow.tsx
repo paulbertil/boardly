@@ -32,7 +32,7 @@ export function CatalogRow({
       className="flex w-full items-center gap-3 border-b border-border/50 px-3 py-2.5 text-left transition-colors hover:bg-accent/50 active:bg-accent"
     >
       {showThumbnail && (
-        <div className="w-12 shrink-0">
+        <div className="w-[72px] shrink-0">
           <CatalogBoard board={board} holds={problem.holds} />
         </div>
       )}

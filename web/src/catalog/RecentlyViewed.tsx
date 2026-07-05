@@ -14,6 +14,7 @@ interface RecentlyViewedProps {
   problems: CatalogProblem[]
   board: CatalogBoardDef
   favoriteIds: Set<string>
+  showThumbnails?: boolean
   onSelect: (problem: CatalogProblem) => void
   onClear: () => void
 }
@@ -22,6 +23,7 @@ export function RecentlyViewed({
   problems,
   board,
   favoriteIds,
+  showThumbnails = false,
   onSelect,
   onClear,
 }: RecentlyViewedProps) {
@@ -47,6 +49,7 @@ export function RecentlyViewed({
           problem={p}
           board={board}
           isFavorite={favoriteIds.has(p.source_catalog_id)}
+          showThumbnail={showThumbnails}
           onSelect={onSelect}
         />
       ))}

@@ -18,9 +18,14 @@ interface CatalogBoardProps {
   showBeta?: boolean
 }
 
-/** Marker diameter as a fraction of one column's span on the board art. */
-const MARKER_COLUMN_RATIO = 0.6
+/** Marker diameter as a fraction of one column's span on the board art.
+    Matches iOS BoardImageView (0.9), so the colored fill reads even at thumbnail
+    size where a thin outline ring would nearly vanish. */
+const MARKER_COLUMN_RATIO = 0.9
 const MARKER_BORDER_WIDTH = '2px'
+/** Two-hex-digit alpha (~0.35) appended to a 6-digit hold color for the fill —
+    the translucent center iOS draws under the colored ring. */
+const MARKER_FILL_ALPHA = '59'
 
 const fill: CSSProperties = {
   position: 'absolute',
@@ -104,8 +109,9 @@ export function CatalogBoard({
               aspectRatio: '1',
               transform: 'translate(-50%, -50%)',
               borderRadius: '50%',
+              backgroundColor: `${holdColor[role]}${MARKER_FILL_ALPHA}`,
               border: `${MARKER_BORDER_WIDTH} solid ${holdColor[role]}`,
-              boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.35)',
+              boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.4)',
               boxSizing: 'border-box',
             }}
           />
