@@ -21,10 +21,6 @@ interface CatalogBoardProps {
 /** Marker diameter as a fraction of one column's span on the board art. */
 const MARKER_COLUMN_RATIO = 0.6
 const MARKER_BORDER_WIDTH = '2px'
-// The board art is black axis labels + colored holds on transparency, drawn for
-// a light backdrop (iOS shows it on a light board / tints labels for dark mode).
-// The component owns a light surface so it stays legible on any page theme.
-const BOARD_SURFACE = '#f4f4f5'
 
 const fill: CSSProperties = {
   position: 'absolute',
@@ -64,14 +60,15 @@ export function CatalogBoard({
 
   return (
     <div
-      className="catalog-board"
+      // Fixed light surface (not a theme token): the board art is dark-on-transparent
+      // and must stay legible regardless of the app's dark theme.
+      className="catalog-board bg-neutral-100"
       role="img"
       aria-label={`${board.name} problem, ${holds.length} holds`}
       style={{
         position: 'relative',
         width: '100%',
         aspectRatio: `${g.width} / ${g.height}`,
-        background: BOARD_SURFACE,
       }}
     >
       <img src={assetUrl(`${board.background}.png`)} alt="" style={fill} onError={hideBrokenImage} />
