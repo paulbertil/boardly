@@ -37,7 +37,7 @@ export function Navigation({ view, onNavigate, disabled = [] }: NavigationProps)
               onClick={() => onNavigate(v)}
               className={cn(
                 'flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[0.7rem] font-medium transition-colors',
-                active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+                active ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
                 isDisabled && 'pointer-events-none opacity-35',
               )}
             >
