@@ -30,8 +30,7 @@ function App() {
   return (
     <div className="app-shell">
       <main className="app-scroll overflow-x-hidden">
-        <header className="mb-3 flex items-center justify-between gap-2">
-          <h1 className="text-base font-semibold tracking-tight">MoonBoard LED</h1>
+        <header className="mb-3 flex items-center justify-end gap-2">
           <AccountMenu />
         </header>
         {effectiveView === 'catalog' && <CatalogScreen />}
