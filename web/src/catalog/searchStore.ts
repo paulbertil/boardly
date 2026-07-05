@@ -1,37 +1,25 @@
-// Transient catalog search state (open + query), shared between the bottom-nav
+// Transient catalog search query, shared between the always-present bottom-nav
 // search field and the catalog list. Deliberately NOT persisted and NOT part of
-// the per-slab FilterState: iOS's .searchable is ephemeral — Cancel clears it and
-// switching boards doesn't carry a stale query.
+// the per-slab FilterState — it's an ephemeral query, cleared only by the field's
+// clear (✕) button, and switching boards doesn't carry a stale value into storage.
 
 import { useSyncExternalStore } from 'react'
 
-type SearchState = { open: boolean; query: string }
-
-let state: SearchState = { open: false, query: '' }
+let query = ''
 const listeners = new Set<() => void>()
 
 function emit() {
   for (const l of listeners) l()
 }
 
-/** Open the search field (empty query). Idempotent. */
-export function openSearch() {
-  if (state.open && state.query === '') return
-  state = { open: true, query: '' }
+export function setSearchQuery(next: string) {
+  if (query === next) return
+  query = next
   emit()
 }
 
-/** Collapse the field and clear the query (iOS Cancel semantics). */
-export function closeSearch() {
-  if (!state.open && state.query === '') return
-  state = { open: false, query: '' }
-  emit()
-}
-
-export function setSearchQuery(query: string) {
-  if (state.query === query) return
-  state = { open: true, query }
-  emit()
+export function clearSearch() {
+  setSearchQuery('')
 }
 
 function subscribe(cb: () => void) {
@@ -42,9 +30,9 @@ function subscribe(cb: () => void) {
 }
 
 function getSnapshot() {
-  return state
+  return query
 }
 
-export function useSearch(): SearchState {
+export function useSearchQuery(): string {
   return useSyncExternalStore(subscribe, getSnapshot)
 }

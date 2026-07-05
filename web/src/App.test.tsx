@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { closeSearch } from './catalog/searchStore'
+import { clearSearch } from './catalog/searchStore'
 import App from './App'
 
 // The catalog screen pulls a slab; stub it out so App tests focus on routing.
@@ -11,7 +11,7 @@ vi.mock('./catalog/useSlab', () => ({
 beforeEach(() => {
   localStorage.clear()
   window.dispatchEvent(new StorageEvent('storage')) // reset boardStore snapshot
-  closeSearch()
+  clearSearch()
 })
 
 describe('App first-run routing', () => {
@@ -21,9 +21,9 @@ describe('App first-run routing', () => {
     expect(screen.getByRole('button', { name: 'Search' })).toBeDisabled()
   })
 
-  it('enables Search once a board is added', () => {
+  it('shows the search field once a board is added', () => {
     render(<App />)
     fireEvent.click(screen.getAllByRole('button', { name: 'Add' })[0])
-    expect(screen.getByRole('button', { name: 'Search' })).toBeEnabled()
+    expect(screen.getByRole('textbox', { name: 'Search problems' })).toBeInTheDocument()
   })
 })

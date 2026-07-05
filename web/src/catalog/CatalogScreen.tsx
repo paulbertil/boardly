@@ -12,7 +12,7 @@ import { ProblemDetail } from './ProblemDetail'
 import { applyFilters, type FilterContext } from './filters'
 import { useFavorites } from './favoritesStore'
 import { useFilters } from './useFilters'
-import { useSearch } from './searchStore'
+import { useSearchQuery } from './searchStore'
 import { useSlab } from './useSlab'
 import type { CatalogProblem } from './catalogSync'
 
@@ -25,7 +25,7 @@ export function CatalogScreen() {
 
   const { problems, loading, degraded } = useSlab(board.layoutId, angle)
   const [filters, setFilters] = useFilters(board.layoutId, angle)
-  const { query: searchQuery } = useSearch()
+  const searchQuery = useSearchQuery()
   const { favoriteIds } = useFavorites()
   const [openIndex, setOpenIndex] = useState<number | null>(null)
 
