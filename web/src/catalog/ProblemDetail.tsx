@@ -151,9 +151,13 @@ export function ProblemDetail({
             </span>
           )}
         </div>
-        <h1 className="text-xl font-bold uppercase leading-tight tracking-tight">{current.name}</h1>
+        <h1 className="text-xl font-bold break-words uppercase leading-tight tracking-tight">
+          {current.name}
+        </h1>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-          <span>{current.setter ? `by ${current.setter}` : `${current.holds.length} holds`}</span>
+          <span className="break-words">
+            {current.setter ? `by ${current.setter}` : `${current.holds.length} holds`}
+          </span>
           {current.stars > 0 && (
             <span className="inline-flex items-center gap-1">
               <Star className="size-3.5" /> {current.stars}

@@ -16,7 +16,7 @@ function App() {
   const noBoards = addedBoards.length === 0
 
   return (
-    <div className="app pb-24">
+    <div className="app overflow-x-hidden pb-24">
       <header className="mb-3">
         <h1 className="text-base font-semibold tracking-tight">MoonBoard LED</h1>
       </header>
