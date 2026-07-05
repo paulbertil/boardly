@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Toggle } from '@/components/ui/toggle'
+import { cn } from '@/lib/utils'
 
 interface MyBoardsProps {
   /** Jump to the catalog after activating a board. */
@@ -99,52 +100,27 @@ function BoardCard({ board, active, onActivate, onRemove, onAngle, onHoldSets }:
   const setName = (id: number) => membership.sets.find((s) => s.id === id)?.name ?? `Set ${id}`
 
   return (
-    <Card>
-      <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
-        <CardTitle className="text-base">
-          {board.name}
-          {active && (
-            <Badge variant="secondary" className="ml-2 align-middle">
-              Active
-            </Badge>
-          )}
-        </CardTitle>
-        <div className="flex gap-1">
-          {!active && (
-            <Button size="sm" onClick={onActivate}>
-              Browse
-            </Button>
-          )}
-          <Button
-            size="sm"
-            variant={confirmRemove ? 'destructive' : 'ghost'}
-            onClick={() => (confirmRemove ? onRemove() : setConfirmRemove(true))}
-            onBlur={() => setConfirmRemove(false)}
-          >
-            {confirmRemove ? 'Confirm?' : 'Remove'}
-          </Button>
-        </div>
+    <Card className={cn('gap-3 py-4', active && 'border-primary/60 bg-primary/5')}>
+      <CardHeader className="flex-row items-center justify-between gap-2 space-y-0 px-4">
+        <CardTitle className="truncate text-base">{board.name}</CardTitle>
+        {active && <Badge className="shrink-0">Active</Badge>}
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-3 px-4">
         {hasAngleChoice(board) && (
           <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Angle</span>
-            {board.angles.map((a) => (
-              <Toggle
-                key={a}
-                size="sm"
-                variant="outline"
-                pressed={angle === a}
-                onPressedChange={() => onAngle(a)}
-              >
-                {a}°
-              </Toggle>
-            ))}
+            <span className="w-11 text-xs font-medium text-muted-foreground">Angle</span>
+            <div className="flex gap-1.5">
+              {board.angles.map((a) => (
+                <Toggle key={a} size="sm" variant="outline" pressed={angle === a} onPressedChange={() => onAngle(a)}>
+                  {a}°
+                </Toggle>
+              ))}
+            </div>
           </div>
         )}
         {filterable.length > 0 && (
-          <div>
-            <div className="mb-1 text-sm text-muted-foreground">Installed hold sets</div>
+          <div className="space-y-1.5">
+            <div className="text-xs font-medium text-muted-foreground">Installed hold sets</div>
             <div className="flex flex-wrap gap-1.5">
               {filterable.map((id) => (
                 <Toggle
@@ -162,6 +138,22 @@ function BoardCard({ board, active, onActivate, onRemove, onAngle, onHoldSets }:
             </div>
           </div>
         )}
+        <div className="flex gap-2 pt-1">
+          {!active && (
+            <Button size="sm" className="flex-1" onClick={onActivate}>
+              Browse
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant={confirmRemove ? 'destructive' : 'ghost'}
+            className={cn(active && 'flex-1', !confirmRemove && 'text-muted-foreground')}
+            onClick={() => (confirmRemove ? onRemove() : setConfirmRemove(true))}
+            onBlur={() => setConfirmRemove(false)}
+          >
+            {confirmRemove ? 'Confirm?' : 'Remove'}
+          </Button>
+        </div>
       </CardContent>
     </Card>
   )
