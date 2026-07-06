@@ -34,10 +34,12 @@ vi.mock('../ble/useBle', () => ({
 
 let storeState: ListsState = { status: 'loaded', lists: [], error: null }
 const removeProblem = vi.fn().mockResolvedValue(undefined)
+const addProblem = vi.fn().mockResolvedValue(undefined)
 vi.mock('./listsStore', () => ({
   useSavedLists: () => storeState,
   loadLists: vi.fn().mockResolvedValue(undefined),
   removeProblem: (...a: unknown[]) => removeProblem(...a),
+  addProblem: (...a: unknown[]) => addProblem(...a),
 }))
 
 let problemsState: ListProblemsState = { problems: [], loading: false, degraded: false }
@@ -148,6 +150,16 @@ describe('ListDetailScreen', () => {
     renderWithRouter('/lists/list-1')
     fireEvent.click(await screen.findByRole('button', { name: 'Remove Forty' }))
     await waitFor(() => expect(removeProblem).toHaveBeenCalledWith('list-1', 'c40'))
+  })
+
+  it('offers an Undo toast that revives the removed problem', async () => {
+    renderWithRouter('/lists/list-1')
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove Forty' }))
+    await waitFor(() => expect(removeProblem).toHaveBeenCalledWith('list-1', 'c40'))
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Undo' }))
+    // Re-add with the list's board layout so the tombstoned row is revived.
+    await waitFor(() => expect(addProblem).toHaveBeenCalledWith('list-1', 'c40', 5))
   })
 
   it('an unknown / other-user listId shows "list not found", no crash', async () => {

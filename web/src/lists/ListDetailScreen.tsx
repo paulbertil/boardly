@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
 import { cn } from '@/lib/utils'
-import { loadLists, removeProblem, useSavedLists } from './listsStore'
+import { addProblem, loadLists, removeProblem, useSavedLists } from './listsStore'
 import { useListProblems } from './useListProblems'
 import { boardShortLabel } from './listsTypes'
 
@@ -89,12 +89,30 @@ export function ListDetailScreen() {
   const current = openId ? displayed.find((p) => p.source_catalog_id === openId) : undefined
 
   function handleRemove(catalogId: string, name: string) {
-    void removeProblem(listId, catalogId).catch((e) =>
-      toast.error(`Could not remove ${name}.`, {
-        description: e instanceof Error ? e.message : undefined,
-        action: { label: 'Retry', onClick: () => void removeProblem(listId, catalogId) },
-      }),
-    )
+    if (!list) return
+    const boardLayoutId = list.boardLayoutId
+    void removeProblem(listId, catalogId)
+      .then(() => {
+        // Removal is a tombstone, so Undo revives the same row via addProblem's
+        // explicit-revive path (KTD8) — no new membership id, no duplicate.
+        toast(`Removed ${name}`, {
+          action: {
+            label: 'Undo',
+            onClick: () =>
+              void addProblem(listId, catalogId, boardLayoutId).catch((e) =>
+                toast.error(`Could not restore ${name}.`, {
+                  description: e instanceof Error ? e.message : undefined,
+                }),
+              ),
+          },
+        })
+      })
+      .catch((e) =>
+        toast.error(`Could not remove ${name}.`, {
+          description: e instanceof Error ? e.message : undefined,
+          action: { label: 'Retry', onClick: () => void removeProblem(listId, catalogId) },
+        }),
+      )
   }
 
   const header = list && (
