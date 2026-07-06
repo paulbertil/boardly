@@ -43,6 +43,12 @@ vi.mock('./listsSync', () => ({
   countListProblems: () => counts(),
 }))
 
+const toastError = vi.fn()
+vi.mock('sonner', () => ({
+  toast: { error: (...a: unknown[]) => toastError(...a) },
+  Toaster: () => null,
+}))
+
 function savedList(id: string, name: string, createdAt: string): SavedList {
   return {
     id,
@@ -133,6 +139,25 @@ describe('ListsScreen', () => {
     fireEvent.change(input, { target: { value: 'Warm-ups' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save name' }))
     expect(renameList).toHaveBeenCalledWith('a', 'Warm-ups')
+  })
+
+  it('a failed rename shows a toast with a Retry action (#8)', async () => {
+    storeState = {
+      status: 'loaded',
+      lists: [savedList('a', 'Warmups', '2026-07-06T01:00:00Z')],
+      error: null,
+    }
+    renameList.mockRejectedValueOnce(new Error('offline'))
+    renderWithRouter('/lists')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Rename Warmups' }))
+    fireEvent.change(await screen.findByLabelText('Rename Warmups'), { target: { value: 'Warm-ups' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save name' }))
+
+    await waitFor(() => expect(toastError).toHaveBeenCalled())
+    const [message, opts] = toastError.mock.calls[0] as [string, { action?: { label: string } }]
+    expect(message).toBe('Could not rename the list.')
+    expect(opts.action?.label).toBe('Retry')
   })
 
   it('delete asks to confirm, then removes', async () => {

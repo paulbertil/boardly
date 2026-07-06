@@ -283,6 +283,7 @@ function ListRowItem({
     } catch (e) {
       toast.error('Could not rename the list.', {
         description: e instanceof Error ? e.message : undefined,
+        action: { label: 'Retry', onClick: () => void renameList(list.id, name) },
       })
     }
   }

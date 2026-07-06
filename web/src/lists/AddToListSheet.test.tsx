@@ -124,6 +124,20 @@ describe('AddToListSheet', () => {
     await waitFor(() => expect(addProblem).toHaveBeenCalledWith('new', 'cat-1', 7))
   })
 
+  it('create succeeds but add fails: shows an add-failed toast, not create-failed (#7)', async () => {
+    createList.mockResolvedValue(savedList('new', 'Warmups', 7))
+    addProblem.mockRejectedValueOnce(new Error('offline'))
+    mount()
+
+    fireEvent.change(await screen.findByLabelText('New list name'), { target: { value: 'Warmups' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(toastError).toHaveBeenCalled())
+    const [message, opts] = toastError.mock.calls[0] as [string, { action?: { label: string } }]
+    expect(message).toBe('List created, but the problem wasn’t added.')
+    expect(opts.action?.label).toBe('Retry')
+  })
+
   it('rejects a blank new-list name (Save disabled)', async () => {
     mount()
     expect(await screen.findByRole('button', { name: 'Save' })).toBeDisabled()

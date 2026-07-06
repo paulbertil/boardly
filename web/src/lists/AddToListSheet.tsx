@@ -101,12 +101,25 @@ export function AddToListSheet({ open, onOpenChange, sourceCatalogId, board }: A
     if (!name || creating) return
     setCreating(true)
     setNewName('')
+    // Two distinct failures, two distinct toasts (#7): a create that fails never created
+    // the list; a create that succeeds but whose follow-up add fails DID create the list,
+    // so the toast must say "couldn't add" (with Retry), not "couldn't create".
+    let list
     try {
-      const list = await createList(name, board.layoutId)
-      await addProblem(list.id, sourceCatalogId, board.layoutId)
+      list = await createList(name, board.layoutId)
     } catch (e) {
       toast.error('Could not create the list.', {
         description: e instanceof Error ? e.message : undefined,
+      })
+      setCreating(false)
+      return
+    }
+    try {
+      await addProblem(list.id, sourceCatalogId, board.layoutId)
+    } catch (e) {
+      toast.error('List created, but the problem wasn’t added.', {
+        description: e instanceof Error ? e.message : undefined,
+        action: { label: 'Retry', onClick: () => void addProblem(list.id, sourceCatalogId, board.layoutId) },
       })
     } finally {
       setCreating(false)
