@@ -155,7 +155,14 @@ export async function createList(name: string, boardLayoutId: number): Promise<S
   }
   const prev = state.lists
   setState({ status: 'loaded', lists: sortNewestFirst([optimistic, ...prev]) })
-  await cacheLists([toListRow(optimistic)])
+  // If the write-through cache write fails, roll the optimistic row back out of the
+  // in-memory store too — otherwise a phantom list lingers with nothing behind it (#4).
+  try {
+    await cacheLists([toListRow(optimistic)])
+  } catch (e) {
+    setState({ lists: prev })
+    throw e instanceof Error ? e : new Error(String(e))
+  }
 
   if (!supabase) return optimistic
   const { data, error } = await supabase
@@ -183,7 +190,14 @@ export async function renameList(id: string, name: string): Promise<void> {
   const target = prev.find((l) => l.id === id)
   const updated = target ? { ...target, name } : null
   setState({ lists: prev.map((l) => (l.id === id ? { ...l, name } : l)) })
-  if (updated) await cacheLists([toListRow(updated)])
+  if (updated) {
+    try {
+      await cacheLists([toListRow(updated)])
+    } catch (e) {
+      setState({ lists: prev })
+      throw e instanceof Error ? e : new Error(String(e))
+    }
+  }
   if (!supabase) return
   const { error } = await supabase.from('lists').update({ name }).eq('id', id)
   if (error) {
@@ -198,7 +212,14 @@ export async function deleteList(id: string): Promise<void> {
   const prev = state.lists
   const target = prev.find((l) => l.id === id)
   setState({ lists: prev.filter((l) => l.id !== id) })
-  if (target) await cacheLists([toListRow({ ...target, deleted: true })])
+  if (target) {
+    try {
+      await cacheLists([toListRow({ ...target, deleted: true })])
+    } catch (e) {
+      setState({ lists: prev })
+      throw e instanceof Error ? e : new Error(String(e))
+    }
+  }
   if (!supabase) return
   const { error } = await supabase.from('lists').update({ deleted: true }).eq('id', id)
   if (error) {
@@ -260,8 +281,27 @@ export async function addProblem(
         })
         .select(LIST_PROBLEM_COLUMNS)
         .single()
-      if (insertError) throw new Error(insertError.message)
-      serverRows = [inserted as ListProblemRow]
+      if (insertError) {
+        // A concurrent first-add (two devices / a double-tap) can win the partial
+        // unique index between our revive-miss and this insert → Postgres 23505. The
+        // problem IS saved, so reconcile the existing live row instead of reporting a
+        // false failure (#5).
+        if ((insertError as { code?: string }).code === '23505') {
+          const { data: existing } = await supabase
+            .from('list_problems')
+            .select(LIST_PROBLEM_COLUMNS)
+            .match({ list_id: listId, source_catalog_id: sourceCatalogId })
+            .eq('deleted', false)
+            .limit(1)
+          const rows = (existing ?? []) as ListProblemRow[]
+          if (rows.length === 0) throw new Error(insertError.message)
+          serverRows = rows
+        } else {
+          throw new Error(insertError.message)
+        }
+      } else {
+        serverRows = [inserted as ListProblemRow]
+      }
     }
     // Reconcile: drop the temp optimistic row, cache the authoritative server row(s).
     await cacheListProblems([toProblemRow(optimistic, { deleted: true }), ...serverRows])
@@ -294,6 +334,10 @@ export async function removeProblem(listId: string, sourceCatalogId: string): Pr
     }
     throw new Error(error.message)
   }
+  // The soft-delete succeeded. If the row wasn't in our cache (e.g. a co-member added it
+  // and we haven't pulled it yet), no optimistic notify fired above — nudge mounted views
+  // to re-read so the removal is reflected (#6).
+  if (!target) notifyProblemsChanged()
 }
 
 // ─── Auth lifecycle (KTD-I9) ──────────────────────────────────────────────────

@@ -25,6 +25,9 @@ const h = vi.hoisted(() => ({
   errorOn: new Set<string>(),
   listSeq: 0,
   problemSeq: 0,
+  // When set, the next list_problems insert simulates losing a concurrent first-add:
+  // the injected row becomes the live winner and the insert returns a 23505 (#5).
+  injectOnInsert: null as ListProblemRow | null,
 }))
 
 function opKey(table: string, steps: Step[]): string {
@@ -71,6 +74,13 @@ function resolve(table: string, steps: Step[]): { data: unknown; error: unknown 
   const insert = steps.find((s) => s.m === 'insert')
   if (insert) {
     const payload = insert.args[0] as Partial<ListProblemRow>
+    // Simulate a concurrent first-add winning the race between our revive-miss and this
+    // insert: the injected row becomes live and the insert fails with a 23505 (#5).
+    if (h.injectOnInsert) {
+      h.serverProblems.push(h.injectOnInsert)
+      h.injectOnInsert = null
+      return { data: null, error: { code: '23505', message: 'unique_violation' } }
+    }
     // Partial unique index: a second LIVE row for the same key would violate it.
     const liveExists = h.serverProblems.some(
       (r) =>
@@ -78,7 +88,7 @@ function resolve(table: string, steps: Step[]): { data: unknown; error: unknown 
         r.list_id === payload.list_id &&
         r.source_catalog_id === payload.source_catalog_id,
     )
-    if (liveExists) return { data: null, error: { message: '23505 unique_violation' } }
+    if (liveExists) return { data: null, error: { code: '23505', message: '23505 unique_violation' } }
     const row: ListProblemRow = {
       id: `srv-p-${++h.problemSeq}`,
       list_id: payload.list_id ?? '',
@@ -92,7 +102,19 @@ function resolve(table: string, steps: Step[]): { data: unknown; error: unknown 
     h.serverProblems.push(row)
     return { data: row, error: null }
   }
-  const update = steps.find((s) => s.m === 'update')!.args[0] as Partial<ListProblemRow>
+  const updateStep = steps.find((s) => s.m === 'update')
+  if (!updateStep) {
+    // Pure select — the #5 re-select of the existing live row after a 23505.
+    const live = h.serverProblems.filter(
+      (r) =>
+        match &&
+        !r.deleted &&
+        r.list_id === match.list_id &&
+        r.source_catalog_id === match.source_catalog_id,
+    )
+    return { data: live, error: null }
+  }
+  const update = updateStep.args[0] as Partial<ListProblemRow>
   const matched = h.serverProblems.filter(
     (r) => match && r.list_id === match.list_id && r.source_catalog_id === match.source_catalog_id,
   )
@@ -141,6 +163,7 @@ import {
   removeProblem,
   renameList,
   resetLists,
+  subscribeListProblemsChanged,
   syncListsIdentity,
 } from './listsStore'
 import {
@@ -214,6 +237,7 @@ beforeEach(async () => {
   h.errorOn = new Set()
   h.listSeq = 0
   h.problemSeq = 0
+  h.injectOnInsert = null
   localStorage.clear()
   readListsMock.mockResolvedValue([])
   readListProblemsMock.mockResolvedValue([])
@@ -290,6 +314,15 @@ describe('createList', () => {
     await expect(createList('Doomed', 7)).rejects.toThrow('boom')
     expect(state().lists.map((l) => l.id)).toEqual(['existing'])
   })
+
+  it('rolls the optimistic row back out of the store if the cache write fails (#4)', async () => {
+    await seedStore([savedList('existing')])
+    cacheListsMock.mockRejectedValueOnce(new Error('idb full'))
+
+    await expect(createList('Phantom', 7)).rejects.toThrow('idb full')
+    // No phantom list lingers with nothing behind it.
+    expect(state().lists.map((l) => l.id)).toEqual(['existing'])
+  })
 })
 
 describe('renameList / deleteList', () => {
@@ -359,6 +392,37 @@ describe('addProblem / removeProblem — explicit revive (KTD8)', () => {
     await expect(removeProblem('list-1', 'cat-1')).rejects.toThrow('boom')
     const restoreCall = cacheListProblemsMock.mock.calls.at(-1)?.[0] as ListProblemRow[]
     expect(restoreCall[0].deleted).toBe(false)
+  })
+
+  it('a concurrent first-add 23505 reconciles the existing row instead of failing (#5)', async () => {
+    // The revive misses (no cached/server row yet), then the insert loses the race to a
+    // concurrent add that wins the partial unique index → 23505.
+    h.injectOnInsert = {
+      id: 'concurrent',
+      list_id: 'list-1',
+      source_catalog_id: 'cat-1',
+      board_layout_id: 7,
+      added_by: 'user-B',
+      created_at: '2026-07-06T00:00:00Z',
+      updated_at: '2026-07-06T00:00:00Z',
+      deleted: false,
+    }
+
+    await expect(addProblem('list-1', 'cat-1', 7)).resolves.toBeUndefined()
+    const live = h.serverProblems.filter((r) => !r.deleted)
+    expect(live).toHaveLength(1)
+    expect(live[0].id).toBe('concurrent')
+  })
+
+  it('removeProblem notifies re-read even when the row was not cached (#6)', async () => {
+    readListProblemsMock.mockResolvedValue([]) // co-member's row, not pulled locally
+    const notified = vi.fn()
+    const unsub = subscribeListProblemsChanged(notified)
+
+    await removeProblem('list-1', 'cat-1')
+
+    expect(notified).toHaveBeenCalled()
+    unsub()
   })
 })
 
