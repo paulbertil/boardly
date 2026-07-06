@@ -100,13 +100,18 @@ describe('shouldShowBleBrowserPrompt', () => {
     expect(shouldShowBleBrowserPrompt()).toBe(false)
   })
 
-  it('false once installed to the Home Screen (no chrome to act on the banner)', () => {
-    stubEnv({ ua: IPHONE_UA, ble: false, standalone: true })
+  it('true on any non-BLE browser (desktop/Android Firefox)', () => {
+    stubEnv({ ua: MAC_UA, touch: 0, ble: false })
+    expect(shouldShowBleBrowserPrompt()).toBe(true)
+  })
+
+  it('false when Web Bluetooth is available (desktop/Android Chrome)', () => {
+    stubEnv({ ua: MAC_UA, touch: 0, ble: true })
     expect(shouldShowBleBrowserPrompt()).toBe(false)
   })
 
-  it('false on desktop', () => {
-    stubEnv({ ua: MAC_UA, touch: 0, ble: false })
+  it('false once installed to the Home Screen (no chrome to act on the banner)', () => {
+    stubEnv({ ua: IPHONE_UA, ble: false, standalone: true })
     expect(shouldShowBleBrowserPrompt()).toBe(false)
   })
 })

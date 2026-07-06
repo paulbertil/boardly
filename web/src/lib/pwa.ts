@@ -47,17 +47,19 @@ export function isFullscreen(): boolean {
 }
 
 /**
- * Show the "open in Bluefy" banner: on an iPhone/iPad in a browser that can't do
- * Bluetooth at all (Safari, in-app webviews). The board can't connect here.
+ * Show the "wrong browser" banner: any browser that can't do Web Bluetooth at all
+ * (iOS Safari, Android Firefox, desktop Safari/Firefox). The board can't connect
+ * here. The banner itself branches the recommendation on `isIosLike()` — Bluefy on
+ * iOS, Chrome elsewhere.
  *
- * Suppressed once running standalone: Safari can add this app to the Home Screen
- * (our own apple-mobile-web-app-capable meta enables it), and that WKWebView also
- * lacks Web Bluetooth — but it has no browser chrome to "open in Bluefy" with, so
- * a banner there is a non-dismissable dead-end. The user sees this advice in the
- * Safari tab *before* installing; we don't strand it on-screen after.
+ * Suppressed once running standalone: iOS Safari can add this app to the Home
+ * Screen (our own apple-mobile-web-app-capable meta enables it), and that WKWebView
+ * also lacks Web Bluetooth — but it has no browser chrome to switch with, so a
+ * banner there is a non-dismissable dead-end. The advice is seen in the browser tab
+ * *before* installing; we don't strand it on-screen after.
  */
 export function shouldShowBleBrowserPrompt(): boolean {
-  return isIosLike() && !hasWebBluetooth() && !isStandalone()
+  return !hasWebBluetooth() && !isStandalone()
 }
 
 /**
@@ -71,6 +73,7 @@ export function shouldOfferFullscreenTip(): boolean {
 }
 
 export const FULLSCREEN_TIP_DISMISSED_KEY = 'moonboard.fullscreenTipDismissed'
+export const INSTALL_DISMISSED_KEY = 'moonboard.installDismissed'
 
 // localStorage can throw in restricted embedders like Bluefy (mirrors the
 // best-effort readLS/writeLS in board/boardStore.ts). Never let a persistence

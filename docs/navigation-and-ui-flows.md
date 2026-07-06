@@ -157,11 +157,18 @@ re-fills defaults on read. `sortSecondary` is deliberately *not* in the URL (fix
 - **PWA**: `vite.config.ts` sets `navigateFallback: '/index.html'` (+ `/assets/` denylist) so deep
   links and the OAuth return survive a hard load. `AppLayout` also mounts two iOS-only, environment-
   gated shell banners (`web/src/shell/{BleBrowserBanner,InstallBanner}.tsx`), driven by the detection
-  helpers in `web/src/lib/pwa.ts`: on iOS **without** Web Bluetooth (Safari) a non-dismissable notice
-  points the user at **Bluefy**; on iOS **with** Web Bluetooth, a dismissable (localStorage-remembered)
-  tip to hide the browser bars via Bluefy's **☰ → Enter fullscreen** (Bluefy has no "Add to Home
-  Screen"; that's Safari-only and would lose Web Bluetooth). Both suppress once `isStandalone()`, and
-  their show-conditions are mutually exclusive (they split on `hasWebBluetooth()`).
+  helpers in `web/src/lib/pwa.ts`. Three mutually-exclusive banners:
+    - **`BleBrowserBanner`** — non-dismissable, shown on any browser **without** Web Bluetooth (the
+      board can't connect). Recommendation branches on `isIosLike()`: **Bluefy** on iOS, **Chrome**
+      elsewhere (Android Firefox, desktop Safari/Firefox).
+    - **`InstallBanner`** — real one-tap PWA install driven by `beforeinstallprompt` (Chrome/Edge/
+      Samsung on Android + desktop Chromium). iOS never fires the event, so it's absent there.
+    - **`FullscreenTipBanner`** — iOS-only (has Web Bluetooth, i.e. Bluefy): a dismissable tip to hide
+      the browser bars via Bluefy's **☰ → Enter fullscreen** (Bluefy has no "Add to Home Screen";
+      that's Safari-only and would lose Web Bluetooth). Auto-hides if the page reports fullscreen.
+  Exclusivity: `BleBrowserBanner` needs no BLE; the other two need BLE. `InstallBanner`
+  (`beforeinstallprompt`) never fires on iOS, where `FullscreenTipBanner` lives. All suppress once
+  `isStandalone()`.
 - **Deferred**: scroll restoration (accepts jump-to-top on Back for now); the `holds` param is
   reserved but its picker UI is not built yet.
 

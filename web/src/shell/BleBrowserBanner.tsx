@@ -1,12 +1,12 @@
-// Non-dismissable notice shown when the app is opened on an iPhone/iPad in a
-// browser without Web Bluetooth (Safari, in-app webviews). The board can't
-// connect at all here, so we point the user at Bluefy — the free Web-Bluetooth
-// browser they can install from the App Store. Stays until they switch browsers
-// (at which point the condition is false); intentionally has no dismiss control.
+// Non-dismissable notice shown when the current browser has no Web Bluetooth, so
+// the board can't connect at all. The recommendation is platform-aware: on iOS
+// only Bluefy can do Web Bluetooth; everywhere else (Android Firefox, desktop
+// Safari/Firefox) Chrome can. Stays until the user switches browsers (at which
+// point the condition is false); intentionally has no dismiss control.
 
 import { Bluetooth } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
-import { shouldShowBleBrowserPrompt } from '@/lib/pwa'
+import { isIosLike, shouldShowBleBrowserPrompt } from '@/lib/pwa'
 
 export function BleBrowserBanner() {
   // Environment doesn't change within a session — evaluate once.
@@ -22,11 +22,19 @@ export function BleBrowserBanner() {
         <Bluetooth aria-hidden className="mt-0.5 size-5 shrink-0 text-destructive" />
         <div className="space-y-1">
           <p className="font-medium text-destructive">This browser can’t connect to Bluetooth</p>
-          <p className="text-muted-foreground">
-            To light up your MoonBoard on iPhone, open this page in{' '}
-            <span className="font-medium text-foreground">Bluefy</span> — a free Bluetooth
-            browser from the App Store. Safari can’t talk to the board.
-          </p>
+          {isIosLike() ? (
+            <p className="text-muted-foreground">
+              To light up your MoonBoard on iPhone, open this page in{' '}
+              <span className="font-medium text-foreground">Bluefy</span> — a free Bluetooth
+              browser from the App Store. Safari can’t talk to the board.
+            </p>
+          ) : (
+            <p className="text-muted-foreground">
+              To light up your MoonBoard, open this page in{' '}
+              <span className="font-medium text-foreground">Google Chrome</span>, which supports
+              Web Bluetooth. This browser can’t talk to the board.
+            </p>
+          )}
         </div>
       </CardContent>
     </Card>

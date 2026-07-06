@@ -36,8 +36,17 @@ describe('BleBrowserBanner', () => {
     expect(screen.queryByRole('region', { name: 'Bluetooth not supported' })).toBeNull()
   })
 
-  it('is hidden on desktop', () => {
+  it('shows on a non-iOS browser without Web Bluetooth and names Chrome', () => {
     stubEnv({ ua: MAC_UA, touch: 0, ble: false })
+    render(<BleBrowserBanner />)
+    const region = screen.getByRole('region', { name: 'Bluetooth not supported' })
+    expect(region).toHaveTextContent(/Chrome/)
+    expect(region).not.toHaveTextContent(/Bluefy/)
+    expect(screen.queryByRole('button')).toBeNull()
+  })
+
+  it('is hidden when Web Bluetooth is available (desktop/Android Chrome)', () => {
+    stubEnv({ ua: MAC_UA, touch: 0, ble: true })
     render(<BleBrowserBanner />)
     expect(screen.queryByRole('region', { name: 'Bluetooth not supported' })).toBeNull()
   })

@@ -1,29 +1,16 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { InstallBanner } from './InstallBanner'
-import { FULLSCREEN_TIP_DISMISSED_KEY } from '@/lib/pwa'
+import { INSTALL_DISMISSED_KEY } from '@/lib/pwa'
 
-const IPHONE_UA =
-  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148'
-const MAC_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0'
+const region = { name: 'Install MoonBoard' }
 
-function stubEnv(opts: {
-  ua: string
-  touch?: number
-  ble?: boolean
-  standalone?: boolean
-  fullscreen?: boolean
-}) {
-  const { ua, touch = 0, ble = false, standalone = false, fullscreen = false } = opts
-  Object.defineProperty(navigator, 'userAgent', { value: ua, configurable: true })
-  Object.defineProperty(navigator, 'maxTouchPoints', { value: touch, configurable: true })
-  Object.defineProperty(navigator, 'bluetooth', { value: ble ? {} : undefined, configurable: true })
+// jsdom lacks matchMedia; isStandalone() reads it. Default to a non-standalone stub.
+function stubMatchMedia(standalone = false) {
   vi.stubGlobal(
     'matchMedia',
     vi.fn((query: string) => ({
-      matches:
-        (standalone && query.includes('standalone')) ||
-        (fullscreen && query.includes('fullscreen')),
+      matches: standalone && query.includes('standalone'),
       media: query,
       onchange: null,
       addListener: () => {},
@@ -35,59 +22,72 @@ function stubEnv(opts: {
   )
 }
 
-const name = { name: 'Go full screen' }
+// Dispatch a synthetic beforeinstallprompt (Chrome fires this on installable pages).
+function fireBeforeInstallPrompt() {
+  const e = new Event('beforeinstallprompt') as Event & { prompt: () => Promise<void> }
+  e.prompt = vi.fn().mockResolvedValue(undefined)
+  const preventDefault = vi.spyOn(e, 'preventDefault')
+  act(() => {
+    window.dispatchEvent(e)
+  })
+  return { e, preventDefault }
+}
 
 afterEach(() => {
-  delete (navigator as { userAgent?: string }).userAgent
-  delete (navigator as { maxTouchPoints?: number }).maxTouchPoints
-  delete (navigator as { bluetooth?: unknown }).bluetooth
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
   localStorage.clear()
 })
 
 describe('InstallBanner', () => {
-  it('shows on iOS + Bluetooth + browser tab', () => {
-    stubEnv({ ua: IPHONE_UA, ble: true })
+  it('is hidden until the browser fires beforeinstallprompt', () => {
+    stubMatchMedia()
     render(<InstallBanner />)
-    expect(screen.getByRole('region', name)).toHaveTextContent(/Enter fullscreen/)
+    expect(screen.queryByRole('region', region)).toBeNull()
   })
 
-  it('is hidden once running from the Home Screen', () => {
-    stubEnv({ ua: IPHONE_UA, ble: true, standalone: true })
+  it('appears once installable and intercepts the default mini-infobar', () => {
+    stubMatchMedia()
     render(<InstallBanner />)
-    expect(screen.queryByRole('region', name)).toBeNull()
+    const { preventDefault } = fireBeforeInstallPrompt()
+    expect(preventDefault).toHaveBeenCalled()
+    expect(screen.getByRole('region', region)).toBeInTheDocument()
   })
 
-  it('is hidden when already in fullscreen', () => {
-    stubEnv({ ua: IPHONE_UA, ble: true, fullscreen: true })
+  it('triggers the native install prompt on click, then hides', () => {
+    stubMatchMedia()
     render(<InstallBanner />)
-    expect(screen.queryByRole('region', name)).toBeNull()
-  })
-
-  it('is hidden without Web Bluetooth', () => {
-    stubEnv({ ua: IPHONE_UA, ble: false })
-    render(<InstallBanner />)
-    expect(screen.queryByRole('region', name)).toBeNull()
-  })
-
-  it('is hidden on desktop', () => {
-    stubEnv({ ua: MAC_UA, touch: 0, ble: true })
-    render(<InstallBanner />)
-    expect(screen.queryByRole('region', name)).toBeNull()
+    const { e } = fireBeforeInstallPrompt()
+    fireEvent.click(screen.getByRole('button', { name: 'Install' }))
+    expect(e.prompt).toHaveBeenCalled()
+    expect(screen.queryByRole('region', region)).toBeNull()
   })
 
   it('dismisses and remembers the choice', () => {
-    stubEnv({ ua: IPHONE_UA, ble: true })
+    stubMatchMedia()
     render(<InstallBanner />)
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss full-screen tip' }))
-    expect(screen.queryByRole('region', name)).toBeNull()
-    expect(localStorage.getItem(FULLSCREEN_TIP_DISMISSED_KEY)).toBe('1')
+    fireBeforeInstallPrompt()
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss install banner' }))
+    expect(screen.queryByRole('region', region)).toBeNull()
+    expect(localStorage.getItem(INSTALL_DISMISSED_KEY)).toBe('1')
   })
 
   it('stays dismissed on a later mount', () => {
-    localStorage.setItem(FULLSCREEN_TIP_DISMISSED_KEY, '1')
-    stubEnv({ ua: IPHONE_UA, ble: true })
+    localStorage.setItem(INSTALL_DISMISSED_KEY, '1')
+    stubMatchMedia()
     render(<InstallBanner />)
-    expect(screen.queryByRole('region', name)).toBeNull()
+    fireBeforeInstallPrompt()
+    expect(screen.queryByRole('region', region)).toBeNull()
+  })
+
+  it('hides after the app is installed', () => {
+    stubMatchMedia()
+    render(<InstallBanner />)
+    fireBeforeInstallPrompt()
+    expect(screen.getByRole('region', region)).toBeInTheDocument()
+    act(() => {
+      window.dispatchEvent(new Event('appinstalled'))
+    })
+    expect(screen.queryByRole('region', region)).toBeNull()
   })
 })
