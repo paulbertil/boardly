@@ -106,12 +106,14 @@ function BoardCard({ board, active, onActivate, onRemove, onAngle, onHoldSets }:
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="truncate font-medium">{board.name}</span>
-            {active && <Badge className="shrink-0">Active</Badge>}
+            {active && (
+              <Badge className="shrink-0 bg-accent text-accent-foreground">Active</Badge>
+            )}
           </div>
           <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
         </div>
         {!active && (
-          <Button size="sm" onClick={onActivate}>
+          <Button size="sm" variant="outline" onClick={onActivate}>
             Browse
           </Button>
         )}

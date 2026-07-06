@@ -131,7 +131,7 @@ export function CatalogList({
           title={showThumbnails ? 'Hide climb previews' : 'Show climb previews'}
           className={cn(
             'flex size-7 items-center justify-center rounded-md transition-colors hover:bg-accent',
-            showThumbnails ? 'text-primary' : 'text-muted-foreground',
+            showThumbnails ? 'text-foreground' : 'text-muted-foreground',
           )}
         >
           <LayoutGrid className="size-4" />

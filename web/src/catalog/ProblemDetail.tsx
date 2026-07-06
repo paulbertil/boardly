@@ -297,7 +297,7 @@ export function ProblemDetail({
       </div>
 
       <div className="space-y-1">
-        <Button size="lg" className="w-full" onClick={lightUp} disabled={busy !== null}>
+        <Button size="lg" variant="secondary" className="w-full" onClick={lightUp} disabled={busy !== null}>
           <Lightbulb className={lit ? 'size-5 fill-current' : 'size-5'} />
           {lightLabel}
         </Button>
