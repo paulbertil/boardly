@@ -25,7 +25,7 @@ export function FilterSheet({ state, onChange, board, gradeSpan, methods }: Filt
     <Drawer showSwipeHandle>
       {/* Positioned by the parent's shared FAB column (CatalogScreen). */}
       <FabTrigger aria-label="Filters">
-        <SlidersHorizontal className="size-6" />
+        <SlidersHorizontal className="size-6" strokeWidth={1.5} />
         {count > 0 && (
           <span className="absolute -top-0.5 -right-0.5 flex size-5 items-center justify-center rounded-full bg-destructive text-[0.7rem] font-semibold text-white">
             {count}
