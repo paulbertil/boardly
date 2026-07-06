@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
+import { useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { boardByLayoutId } from '../board/boards'
 import type { CatalogProblem } from './catalogSync'
@@ -37,19 +38,31 @@ function problem(id: string, name: string): CatalogProblem {
 
 const list = [problem('a', 'First'), problem('b', 'Middle'), problem('c', 'Last')]
 
-function renderDetail(initialIndex: number, problems = list) {
-  return render(
+// A controlled harness mirroring CatalogScreen: the URL (here, local state) owns the
+// shown problem; ProblemDetail pages by calling onNavigate. `displayed` is the paging
+// domain; the shown problem is resolved against it, falling back to `slab` (so a
+// deep-linked, filtered-out problem still renders standalone).
+function Pager({ id, displayed, slab = list }: { id: string; displayed: CatalogProblem[]; slab?: CatalogProblem[] }) {
+  const [current, setCurrent] = useState(id)
+  const resolved =
+    displayed.find((p) => p.source_catalog_id === current) ??
+    slab.find((p) => p.source_catalog_id === current)!
+  return (
     <AuthProvider>
       <ProblemDetail
-        problems={problems}
-        initialIndex={initialIndex}
+        problem={resolved}
+        displayed={displayed}
         board={board}
         angle={40}
         favoriteIds={new Set()}
-        onClose={vi.fn()}
+        onNavigate={setCurrent}
       />
-    </AuthProvider>,
+    </AuthProvider>
   )
+}
+
+function renderDetail(id: string, displayed = list) {
+  return render(<Pager id={id} displayed={displayed} />)
 }
 
 beforeEach(() => {
@@ -62,51 +75,39 @@ beforeEach(() => {
 
 describe('ProblemDetail', () => {
   it('renders the current problem metadata', () => {
-    renderDetail(1)
+    renderDetail('b')
     expect(screen.getByText('Middle')).toBeInTheDocument()
     expect(screen.getByText('by Alice')).toBeInTheDocument()
     expect(screen.getByText('6B')).toBeInTheDocument()
   })
 
   it('disables prev at the first and next at the last (no wrap)', () => {
-    renderDetail(0)
+    renderDetail('a')
     expect(screen.getByRole('button', { name: 'Previous problem' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Next problem' })).toBeEnabled()
   })
 
   it('pages forward through the list', () => {
-    renderDetail(1)
+    renderDetail('b')
     fireEvent.click(screen.getByRole('button', { name: 'Next problem' }))
     expect(screen.getByText('Last')).toBeInTheDocument()
   })
 
-  it('stays on the current problem if it leaves the filtered set', () => {
-    const { rerender } = renderDetail(1) // showing "Middle"
-    // Parent recomputes the list and drops "Middle" (e.g. unfavorited under a filter).
-    rerender(
-      <AuthProvider>
-        <ProblemDetail
-          problems={[list[0], list[2]]}
-          initialIndex={1}
-          board={board}
-          angle={40}
-          favoriteIds={new Set()}
-          onClose={vi.fn()}
-        />
-      </AuthProvider>,
-    )
-    expect(screen.getByText('Middle')).toBeInTheDocument() // did not jump
+  it('shows a deep-linked problem excluded from the filtered list with paging disabled', () => {
+    // "Middle" is not in the displayed (filtered) list, but resolves from the slab.
+    render(<Pager id="b" displayed={[list[0], list[2]]} />)
+    expect(screen.getByText('Middle')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Previous problem' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Next problem' })).toBeDisabled()
   })
 
   it('records the viewed problem into recents', () => {
-    renderDetail(1)
+    renderDetail('b')
     expect(getRecentIds(7, 40)).toEqual(['b'])
   })
 
   it('toggles the favorite', () => {
-    renderDetail(1)
+    renderDetail('b')
     expect(isFavorite('b')).toBe(false)
     fireEvent.click(screen.getByRole('button', { name: 'Favorite' }))
     expect(isFavorite('b')).toBe(true)
@@ -114,7 +115,7 @@ describe('ProblemDetail', () => {
 
   it('connects before sending when disconnected, and does not send if connect fails', async () => {
     vi.mocked(ble.isConnected).mockReturnValue(false) // stays disconnected
-    renderDetail(1)
+    renderDetail('b')
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /connect & light up/i }))
     })
@@ -125,7 +126,7 @@ describe('ProblemDetail', () => {
   it('sends the mapped holds when already connected', async () => {
     vi.mocked(ble.useBle).mockReturnValue({ state: 'connected', deviceName: 'MB', error: null })
     vi.mocked(ble.isConnected).mockReturnValue(true)
-    renderDetail(1)
+    renderDetail('b')
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /light up/i }))
     })
@@ -139,7 +140,7 @@ describe('ProblemDetail', () => {
     vi.mocked(ble.useBle).mockReturnValue({ state: 'connected', deviceName: 'MB', error: null })
     vi.mocked(ble.isConnected).mockReturnValue(true)
     vi.mocked(ble.bleClient.send).mockRejectedValueOnce(new Error('write failed'))
-    renderDetail(1)
+    renderDetail('b')
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /light up/i }))
     })

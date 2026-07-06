@@ -23,8 +23,8 @@ import { Toggle } from '@/components/ui/toggle'
 import { cn } from '@/lib/utils'
 
 interface MyBoardsProps {
-  /** Jump to the catalog after activating a board. */
-  onActivated: () => void
+  /** Jump to the catalog after activating a board (given its layout id). */
+  onActivated: (layoutId: number) => void
 }
 
 export function MyBoards({ onActivated }: MyBoardsProps) {
@@ -52,7 +52,7 @@ export function MyBoards({ onActivated }: MyBoardsProps) {
               active={board.layoutId === activeBoard.layoutId}
               onActivate={() => {
                 activateBoard(board.layoutId)
-                onActivated()
+                onActivated(board.layoutId)
               }}
               onRemove={() => removeBoard(board.layoutId)}
               onAngle={(angle) => setAngle(board.layoutId, angle)}

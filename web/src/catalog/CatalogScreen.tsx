@@ -1,38 +1,66 @@
-// Wires the active board's slab into the browsing UI: the filter bar, the list,
-// and the detail pager. Owns the single useSlab and derives the filter context
-// (favorites + installed-hold-set climbable check) that applyFilters needs.
+// Wires the routed board's slab into the browsing UI: the filter bar, the list,
+// the recents sheet, and the detail pager. The URL is the source of truth —
+// filters, sort, search, the resolved angle, and the open problem all come from
+// `?…` search params and are written back with `navigate` (replace for
+// filters/search, push-on-open / replace-on-swipe for the problem drawer). Owns
+// the single useSlab and derives the filter context (favorites + installed-hold-set
+// climbable check).
 
-import { useCallback, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Loader2 } from 'lucide-react'
+import { getRouteApi, useRouter } from '@tanstack/react-router'
 import { FONT_GRADES, gradeIndex } from '../board/grades'
-import { getActiveHoldSetsRaw, getAngle, useBoardStore } from '../board/boardStore'
+import { boardByLayoutId, defaultAngle } from '../board/boards'
+import { getActiveHoldSetsRaw, getAngle, setAngle, useBoardStore } from '../board/boardStore'
 import { holdSetContext, isClimbable } from '../board/holdSetMembership'
 import { CatalogList } from './CatalogList'
 import { FilterSheet } from './FilterSheet'
 import { RecentsSheet } from './RecentsSheet'
 import { ProblemDetail } from './ProblemDetail'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
-import { applyFilters, type FilterContext } from './filters'
+import { Button } from '@/components/ui/button'
+import { applyFilters, type FilterContext, type FilterState } from './filters'
+import { filtersToSearch, searchToFilters } from './catalogSearch'
+import { saveSeed } from './filterSeed'
 import { useFavorites } from './favoritesStore'
-import { useFilters } from './useFilters'
-import { useSearchQuery } from './searchStore'
 import { useSlab } from './useSlab'
 import type { CatalogProblem } from './catalogSync'
 
+const routeApi = getRouteApi('/board/$layoutId/catalog')
+
 export function CatalogScreen() {
-  const { activeBoard } = useBoardStore()
-  const board = activeBoard
-  // getAngle reads localStorage; the store re-renders this component on angle
-  // change (useBoardStore), so reading it in render stays current.
-  const angle = getAngle(board)
+  const router = useRouter()
+  const { layoutId } = routeApi.useParams()
+  const search = routeApi.useSearch()
+  const navigate = routeApi.useNavigate()
+
+  const { addedBoards, addBoard } = useBoardStore()
+  // beforeLoad guarantees the board exists in the registry (unknown ids redirect).
+  const board = boardByLayoutId(Number(layoutId))!
+  const added = addedBoards.some((b) => b.layoutId === board.layoutId)
+
+  // Angle comes from the URL (?angle), never a fresh getAngle() in render — the URL
+  // is the single truth, so localStorage can't drift from it. Fall back to the
+  // board's default when the URL omits it or names an angle the board doesn't have.
+  const angle = board.angles.includes(search.angle) ? search.angle : defaultAngle(board)
+
+  // Mirror the resolved angle back into boardStore so /boards (which can't read this
+  // route) stays coherent with a deep-linked ?angle. Only writes when it differs.
+  useEffect(() => {
+    if (getAngle(board) !== angle) setAngle(board.layoutId, angle)
+  }, [board, angle])
 
   const { problems, loading, degraded } = useSlab(board.layoutId, angle)
-  const [filters, setFilters] = useFilters(board.layoutId, angle)
-  const searchQuery = useSearchQuery()
   const { favoriteIds } = useFavorites()
-  // The detail pager's source list + starting index. List taps page over the
-  // filtered `displayed`; recent taps page over the full unfiltered `problems`
-  // slab, so a recent opens regardless of the active filters (iOS parity).
-  const [openTarget, setOpenTarget] = useState<{ list: CatalogProblem[]; index: number } | null>(null)
+
+  const filters = useMemo(() => searchToFilters(search), [search])
+
+  // Persist filter changes to the URL (source of truth) and write them through to the
+  // cold-launch seed. filtersToSearch omits angle/problem, so spreading preserves them.
+  const setFilters = (next: FilterState) => {
+    saveSeed(board.layoutId, angle, next)
+    void navigate({ search: (prev) => ({ ...prev, ...filtersToSearch(next) }), replace: true })
+  }
 
   // The slab's actual grade span (ordinal) for the slider, and its methods.
   const gradeSpan = useMemo<[number, number]>(() => {
@@ -44,38 +72,84 @@ export function CatalogScreen() {
     [problems],
   )
 
-  // Installed-hold-set climbable check for the active board.
+  // Installed-hold-set climbable check. The raw string is read in render (boardStore
+  // re-renders this component when it changes) and is a memo dep, so toggling installed
+  // sets re-derives the filter without relying on a coincidental re-render.
+  const activeHoldSetsRaw = getActiveHoldSetsRaw(board.layoutId)
   const context = useMemo<FilterContext>(() => {
-    const { membership, active } = holdSetContext(board.membershipResource, getActiveHoldSetsRaw(board.layoutId))
+    const { membership, active } = holdSetContext(board.membershipResource, activeHoldSetsRaw)
     return { favoriteIds, isClimbable: (holds) => isClimbable(membership, holds, active) }
-  }, [board, favoriteIds])
+  }, [board, favoriteIds, activeHoldSetsRaw])
 
-  // Search is transient (bottom-nav field), so inject it into the filter call
-  // rather than persisting it in FilterState.
-  const transform = useCallback(
-    (list: CatalogProblem[]) => applyFilters(list, { ...filters, search: searchQuery }, context),
-    [filters, searchQuery, context],
+  const transform = useMemo(
+    () => (list: CatalogProblem[]) => applyFilters(list, filters, context),
+    [filters, context],
   )
   const displayed = useMemo(() => transform(problems), [transform, problems])
 
   // Ring the actively-filtered holds on thumbnails + the detail board (iOS parity).
   const highlightHolds = useMemo(() => new Set(filters.holdsFilter), [filters.holdsFilter])
 
+  // ── Problem drawer, driven by ?problem ──────────────────────────────────────
+  // The open problem's id lives in ?problem (deep-linkable). The pager *domain* is
+  // session state: a recents snapshot when opened from the recents sheet (so paging
+  // stays within recents, filter-independent — iOS parity), else the filtered
+  // `displayed` list. Push on open (Back closes the drawer), replace on paging.
+  const [pagerStack, setPagerStack] = useState<CatalogProblem[] | null>(null)
+  const openId = search.problem
+  const pagerList = pagerStack ?? displayed
+  // Resolve against the active pager domain, falling back to the full slab so a
+  // deep-linked problem the filters exclude still opens (standalone, prev/next off).
+  const current = openId
+    ? (pagerList.find((p) => p.source_catalog_id === openId) ??
+      problems.find((p) => p.source_catalog_id === openId))
+    : undefined
+  // A deep link can request a problem before its slab has synced (cold cache / first
+  // open). Keep the drawer open showing a spinner rather than nothing until the slab
+  // resolves; if it loads and the id still isn't there, the drawer closes.
+  const problemPending = Boolean(openId) && !current && loading
+  const drawerOpen = current !== undefined || problemPending
+
+  // Drop the recents pager source whenever the drawer closes (?problem cleared by any
+  // means: Back, gesture, deep-link removal) so a later list tap or deep link never
+  // pages over a stale recents snapshot.
+  useEffect(() => {
+    if (!openId) setPagerStack(null)
+  }, [openId])
+
+  // Whether this drawer session was push-opened (so Back should close it) rather than
+  // entered cold via a deep link (nothing to go Back to).
+  const pushed = useRef(false)
+
   // List taps: page over the filtered list.
   const openProblem = (problem: CatalogProblem) => {
-    const i = displayed.findIndex((p) => p.source_catalog_id === problem.source_catalog_id)
-    if (i >= 0) setOpenTarget({ list: displayed, index: i })
+    pushed.current = true
+    setPagerStack(null)
+    void navigate({ search: (prev) => ({ ...prev, problem: problem.source_catalog_id }) })
   }
-
-  // Recent taps: page over the recents stack itself (the snapshot RecentsSheet
-  // hands over), so swiping stays within your recents and never surfaces the
-  // in-between slab entries. Filter-independent — the stack is the resolved recents.
+  // Recent taps: page over the recents snapshot RecentsSheet hands over.
   const openRecent = (stack: CatalogProblem[], index: number) => {
-    setOpenTarget({ list: stack, index })
+    pushed.current = true
+    setPagerStack(stack)
+    void navigate({ search: (prev) => ({ ...prev, problem: stack[index].source_catalog_id }) })
+  }
+  const showProblem = (id: string) => {
+    void navigate({ search: (prev) => ({ ...prev, problem: id }), replace: true })
+  }
+  const closeDrawer = () => {
+    if (pushed.current) {
+      pushed.current = false
+      void router.history.back()
+    } else {
+      // Not push-opened (cold deep-link): drop ?problem in place. '' is its default,
+      // so the strip middleware removes it from the URL.
+      void navigate({ search: (prev) => ({ ...prev, problem: '' }), replace: true })
+    }
   }
 
   return (
     <div className="flex flex-1 flex-col">
+      {!added && <UnaddedBoardBanner name={board.name} onAdd={() => addBoard(board.layoutId)} />}
       <CatalogList
         board={board}
         angle={angle}
@@ -84,7 +158,7 @@ export function CatalogScreen() {
         degraded={degraded}
         favoriteIds={favoriteIds}
         transform={transform}
-        searchActive={searchQuery.trim().length > 0}
+        searchActive={filters.search.trim().length > 0}
         highlightHolds={highlightHolds}
         onSelect={openProblem}
       />
@@ -96,24 +170,45 @@ export function CatalogScreen() {
         <FilterSheet state={filters} onChange={setFilters} board={board} gradeSpan={gradeSpan} methods={methods} />
       </div>
 
-      <Drawer open={openTarget !== null} onOpenChange={(open) => !open && setOpenTarget(null)} showSwipeHandle>
+      <Drawer open={drawerOpen} onOpenChange={(open) => !open && closeDrawer()} showSwipeHandle>
         <DrawerContent>
           <DrawerTitle className="sr-only">Problem details</DrawerTitle>
-          {openTarget !== null && (
-            <div className="max-h-[85vh] overflow-y-auto px-4 pt-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
+          <div className="max-h-[85vh] overflow-y-auto px-4 pt-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
+            {current ? (
               <ProblemDetail
-                problems={openTarget.list}
-                initialIndex={openTarget.index}
+                problem={current}
+                displayed={pagerList}
                 board={board}
                 angle={angle}
                 favoriteIds={favoriteIds}
                 highlightHolds={highlightHolds}
-                onClose={() => setOpenTarget(null)}
+                onNavigate={showProblem}
               />
-            </div>
-          )}
+            ) : problemPending ? (
+              <div
+                className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-muted-foreground"
+                data-testid="problem-pending"
+              >
+                <Loader2 className="size-6 animate-spin" />
+                <p className="text-sm">Loading problem…</p>
+              </div>
+            ) : null}
+          </div>
         </DrawerContent>
       </Drawer>
+    </div>
+  )
+}
+
+function UnaddedBoardBanner({ name, onAdd }: { name: string; onAdd: () => void }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-border bg-muted px-3 py-2 text-sm">
+      <span className="min-w-0 truncate text-muted-foreground">
+        Previewing <span className="font-medium text-foreground">{name}</span>
+      </span>
+      <Button size="sm" onClick={onAdd}>
+        Add this board
+      </Button>
     </div>
   )
 }

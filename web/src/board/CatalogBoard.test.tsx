@@ -81,4 +81,21 @@ describe('CatalogBoard', () => {
     expect(screen.queryByRole('button')).toBeNull()
     expect(screen.getByTestId('hold-marker').tagName).toBe('DIV')
   })
+
+  it('rings only the highlighted positions the problem actually uses', () => {
+    render(
+      <CatalogBoard
+        board={mini}
+        holds={[hold(0, 1, 'start'), hold(5, 6, 'left')]}
+        // 0-1 is on the problem; 9-9 is not — it must not float a ring on bare art.
+        highlightHolds={new Set(['0-1', '9-9'])}
+      />,
+    )
+    expect(screen.getAllByTestId('hold-highlight')).toHaveLength(1)
+  })
+
+  it('rings nothing without a highlight set', () => {
+    render(<CatalogBoard board={mini} holds={[hold(0, 1, 'start')]} />)
+    expect(screen.queryByTestId('hold-highlight')).toBeNull()
+  })
 })

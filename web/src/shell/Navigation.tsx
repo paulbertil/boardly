@@ -9,10 +9,11 @@
 //   home screen visited before searching) is shown — the other home tab is hidden until
 //   you leave the catalog.
 //
-// "Detail" is a sub-view of the catalog and keeps the same bar.
+// "Detail" is a sub-view of the catalog and keeps the same bar. Fully prop-driven: the
+// search query and its writes are owned by the router-aware AppLayout, not this bar.
 
 import { BookOpen, Layers, Search, X } from 'lucide-react'
-import { clearSearch, setSearchQuery, useSearchQuery } from '../catalog/searchStore'
+import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 
 export type NavView = 'boards' | 'catalog' | 'logbook'
@@ -25,9 +26,21 @@ interface NavigationProps {
   origin?: HomeView
   /** Views that can't be reached yet (e.g. Catalog before a board is added). */
   disabled?: NavView[]
+  /** Current search query (owned by AppLayout). */
+  query: string
+  onQueryChange: (query: string) => void
+  onClear: () => void
 }
 
-export function Navigation({ view, onNavigate, origin = 'boards', disabled = [] }: NavigationProps) {
+export function Navigation({
+  view,
+  onNavigate,
+  origin = 'boards',
+  disabled = [],
+  query,
+  onQueryChange,
+  onClear,
+}: NavigationProps) {
   const searchDisabled = disabled.includes('catalog') // search browses the catalog slab
 
   return (
@@ -44,7 +57,7 @@ export function Navigation({ view, onNavigate, origin = 'boards', disabled = [] 
             ) : (
               <LogbookTab active={false} onClick={() => onNavigate('logbook')} />
             )}
-            <SearchField />
+            <SearchField query={query} onQueryChange={onQueryChange} onClear={onClear} />
           </>
         ) : (
           // Home screens: both tabs left-clustered, the compact Search tab pinned right.
@@ -67,25 +80,32 @@ export function Navigation({ view, onNavigate, origin = 'boards', disabled = [] 
   )
 }
 
-function SearchField() {
-  const query = useSearchQuery()
+function SearchField({
+  query,
+  onQueryChange,
+  onClear,
+}: {
+  query: string
+  onQueryChange: (query: string) => void
+  onClear: () => void
+}) {
   return (
     <div className="relative flex-1 py-2">
-      <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-      <input
+      <Search className="pointer-events-none absolute top-1/2 left-2.5 z-10 size-4 -translate-y-1/2 text-muted-foreground" />
+      <Input
         type="text"
         value={query}
-        onChange={(e) => setSearchQuery(e.target.value)}
+        onChange={(e) => onQueryChange(e.target.value)}
         placeholder="Name or setter"
         aria-label="Search problems"
-        className="h-9 w-full rounded-md border border-input bg-input/30 pr-8 pl-9 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        className="h-9 rounded-md pr-8 pl-9 text-sm"
       />
       {query && (
         <button
           type="button"
           aria-label="Clear search"
-          onClick={clearSearch}
-          className="absolute top-1/2 right-2 flex size-5 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+          onClick={onClear}
+          className="absolute top-1/2 right-2 z-10 flex size-5 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
         >
           <X className="size-4" />
         </button>

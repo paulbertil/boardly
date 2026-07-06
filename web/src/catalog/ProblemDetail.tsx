@@ -2,9 +2,11 @@
 // prev/next across the current filtered list, favorite toggle, and Light up over
 // Web Bluetooth. Records the view into recents. Mirrors iOS CatalogProblemPager.
 //
-// The shown problem is tracked by id (not a live array index), so if it leaves
-// the filtered set while open (e.g. unfavorited under a favorites-only filter),
-// the pager stays on it rather than jumping — prev/next just disable.
+// The shown problem is owned by the URL (?problem) and passed in as `problem`;
+// paging calls `onNavigate(id)` (a replace-navigation) rather than mutating local
+// state. The pager domain is the `displayed` list (the filtered catalog, or a
+// recents snapshot when opened from the recents sheet) — a deep-linked problem the
+// active filters exclude is not in it, so prev/next disable and it shows standalone.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { BadgeCheck, CheckCircle2, ChevronLeft, ChevronRight, Heart, Lightbulb, Repeat, Star } from 'lucide-react'
@@ -25,14 +27,17 @@ import { LogAscentSheet, type LogTarget } from '../logbook/LogAscentSheet'
 import { Button } from '@/components/ui/button'
 
 interface ProblemDetailProps {
-  problems: CatalogProblem[]
-  initialIndex: number
+  /** The problem to show (resolved from ?problem, with full-slab fallback, upstream). */
+  problem: CatalogProblem
+  /** The filtered paging domain — prev/next move within this list. */
+  displayed: CatalogProblem[]
   board: CatalogBoardDef
   angle: number
   favoriteIds: Set<string>
   /** "col-row" positions from the active holds filter to ring on the board. */
   highlightHolds?: Set<string>
-  onClose: () => void
+  /** Page to another problem (replace-navigates ?problem). */
+  onNavigate: (id: string) => void
 }
 
 function toHoldAssignments(holds: CatalogHold[]): HoldAssignment[] {
@@ -40,15 +45,14 @@ function toHoldAssignments(holds: CatalogHold[]): HoldAssignment[] {
 }
 
 export function ProblemDetail({
-  problems,
-  initialIndex,
+  problem: current,
+  displayed,
   board,
   angle,
   favoriteIds,
   highlightHolds,
-  onClose,
+  onNavigate,
 }: ProblemDetailProps) {
-  const [current, setCurrent] = useState<CatalogProblem | undefined>(() => problems[initialIndex])
   const swipeStart = useRef<{ x: number; y: number } | null>(null)
   const { state } = useBle()
   const { toggleFavorite } = useFavorites()
@@ -62,14 +66,15 @@ export function ProblemDetail({
   const [signInOpen, setSignInOpen] = useState(false)
   // Inline "Log try" stepper state: session-local pending tries for the shown problem,
   // written (merged) to the unsent-attempt row only when leaving the problem (iOS parity).
-  const [pendingProblemId, setPendingProblemId] = useState<string | null>(null)
+  // The pending problem is held as the object so a leave-flush needs no list lookup.
+  const [pendingProblem, setPendingProblem] = useState<CatalogProblem | null>(null)
   const [pendingTries, setPendingTries] = useState(0)
 
-  const currentId = current?.source_catalog_id
+  const currentId = current.source_catalog_id
 
   // Record the view (move-to-front recents) whenever the shown problem changes.
   useEffect(() => {
-    if (currentId) recordRecent(board.layoutId, angle, currentId)
+    recordRecent(board.layoutId, angle, currentId)
   }, [currentId, board.layoutId, angle])
 
   // A newly-shown problem isn't lit yet; disconnecting clears the lit state.
@@ -78,40 +83,30 @@ export function ProblemDetail({
     if (state !== 'connected') setLit(false)
   }, [state])
 
-  // If there's nothing to show (the pager was opened on an empty list), close.
-  useEffect(() => {
-    if (!current) onClose()
-  }, [current, onClose])
-
   // ── Deferred flush of the inline "Log try" stepper (iOS parity) ──────────────
   // Write/merge the unsent-attempt row only when the user leaves the problem: paging
   // to another problem, or closing the pager (unmount). Same-day tries accumulate.
-  const flush = useCallback(
-    (problemId: string | null, tries: number) => {
-      if (!problemId || tries <= 0) return
-      const p = problems.find((x) => x.source_catalog_id === problemId)
-      if (!p) return
-      void addAttemptTries({
-        sourceCatalogId: p.source_catalog_id,
-        problemName: p.name,
-        problemGrade: p.grade,
-        boardLayoutId: board.layoutId,
-        date: new Date().toISOString(),
-        addTries: tries,
-      })
-    },
-    [problems, board.layoutId],
-  )
+  const flush = useCallback((p: CatalogProblem | null, tries: number) => {
+    if (!p || tries <= 0) return
+    void addAttemptTries({
+      sourceCatalogId: p.source_catalog_id,
+      problemName: p.name,
+      problemGrade: p.grade,
+      boardLayoutId: board.layoutId,
+      date: new Date().toISOString(),
+      addTries: tries,
+    })
+  }, [board.layoutId])
 
   // Mirror pending state into refs so the navigation/unmount flushes read fresh values
   // without re-subscribing.
-  const pendingRef = useRef<{ problemId: string | null; tries: number }>({
-    problemId: null,
+  const pendingRef = useRef<{ problem: CatalogProblem | null; tries: number }>({
+    problem: null,
     tries: 0,
   })
   useEffect(() => {
-    pendingRef.current = { problemId: pendingProblemId, tries: pendingTries }
-  }, [pendingProblemId, pendingTries])
+    pendingRef.current = { problem: pendingProblem, tries: pendingTries }
+  }, [pendingProblem, pendingTries])
   const flushRef = useRef(flush)
   flushRef.current = flush
 
@@ -120,9 +115,9 @@ export function ProblemDetail({
   useEffect(() => {
     if (shownIdRef.current !== currentId) {
       const prev = pendingRef.current
-      if (prev.problemId && prev.problemId !== currentId) {
-        flush(prev.problemId, prev.tries)
-        setPendingProblemId(null)
+      if (prev.problem && prev.problem.source_catalog_id !== currentId) {
+        flush(prev.problem, prev.tries)
+        setPendingProblem(null)
         setPendingTries(0)
       }
       shownIdRef.current = currentId
@@ -132,17 +127,15 @@ export function ProblemDetail({
   // Flush on close/unmount (drawer dismissed → ProblemDetail unmounts).
   useEffect(
     () => () => {
-      const { problemId, tries } = pendingRef.current
-      flushRef.current(problemId, tries)
+      const { problem, tries } = pendingRef.current
+      flushRef.current(problem, tries)
     },
     [],
   )
 
-  if (!current) return null
-
-  const pos = problems.findIndex((p) => p.source_catalog_id === current.source_catalog_id)
+  const pos = displayed.findIndex((p) => p.source_catalog_id === currentId)
   const { visible } = holdSetContext(board.membershipResource, getActiveHoldSetsRaw(board.layoutId))
-  const isFav = favoriteIds.has(current.source_catalog_id)
+  const isFav = favoriteIds.has(currentId)
 
   async function lightUp() {
     if (busy) return
@@ -158,7 +151,7 @@ export function ProblemDetail({
     }
     setBusy('sending')
     try {
-      await bleClient.send(toHoldAssignments(current!.holds), {
+      await bleClient.send(toHoldAssignments(current.holds), {
         rows: board.geometry.numRows,
         flipped: getFlipped(board.layoutId),
         showBeta: true,
@@ -182,19 +175,19 @@ export function ProblemDetail({
         : 'Connect & light up'
 
   const atFirst = pos <= 0
-  const atLast = pos < 0 || pos >= problems.length - 1
+  const atLast = pos < 0 || pos >= displayed.length - 1
 
   // The count shown in the stepper — session-local pending tries for THIS problem only
   // (starts at 0 each time a problem is shown; not hydrated from existing logs, per iOS).
-  const currentTries = pendingProblemId === current.source_catalog_id ? pendingTries : 0
+  const currentTries = pendingProblem?.source_catalog_id === currentId ? pendingTries : 0
 
   function addTry() {
     if (!signedIn) {
       setSignInOpen(true)
       return
     }
-    if (pendingProblemId !== current!.source_catalog_id) {
-      setPendingProblemId(current!.source_catalog_id)
+    if (pendingProblem?.source_catalog_id !== currentId) {
+      setPendingProblem(current)
       setPendingTries(1)
     } else {
       setPendingTries((t) => t + 1)
@@ -205,7 +198,7 @@ export function ProblemDetail({
     if (currentTries <= 0) return
     setPendingTries((t) => {
       const next = t - 1
-      if (next === 0) setPendingProblemId(null)
+      if (next === 0) setPendingProblem(null)
       return next
     })
   }
@@ -218,9 +211,9 @@ export function ProblemDetail({
     }
     setLogTarget({
       kind: 'create',
-      sourceCatalogId: current!.source_catalog_id,
-      problemName: current!.name,
-      problemGrade: current!.grade,
+      sourceCatalogId: currentId,
+      problemName: current.name,
+      problemGrade: current.grade,
       boardLayoutId: board.layoutId,
       sent: true,
       tries: Math.max(currentTries, 1),
@@ -240,8 +233,8 @@ export function ProblemDetail({
     const dx = e.clientX - start.x
     const dy = e.clientY - start.y
     if (Math.abs(dx) < 50 || Math.abs(dx) <= Math.abs(dy)) return // not a clear horizontal swipe
-    if (dx < 0 && !atLast) setCurrent(problems[pos + 1])
-    else if (dx > 0 && !atFirst) setCurrent(problems[pos - 1])
+    if (dx < 0 && !atLast) onNavigate(displayed[pos + 1].source_catalog_id)
+    else if (dx > 0 && !atFirst) onNavigate(displayed[pos - 1].source_catalog_id)
   }
 
   return (
@@ -282,14 +275,14 @@ export function ProblemDetail({
             size="icon"
             aria-label={isFav ? 'Unfavorite' : 'Favorite'}
             aria-pressed={isFav}
-            onClick={() => toggleFavorite(current.source_catalog_id)}
+            onClick={() => toggleFavorite(currentId)}
           >
             <Heart className={isFav ? 'size-5 fill-favorite text-favorite' : 'size-5'} />
           </Button>
-          <Button variant="ghost" size="icon" aria-label="Previous problem" disabled={atFirst} onClick={() => setCurrent(problems[pos - 1])}>
+          <Button variant="ghost" size="icon" aria-label="Previous problem" disabled={atFirst} onClick={() => onNavigate(displayed[pos - 1].source_catalog_id)}>
             <ChevronLeft className="size-5" />
           </Button>
-          <Button variant="ghost" size="icon" aria-label="Next problem" disabled={atLast} onClick={() => setCurrent(problems[pos + 1])}>
+          <Button variant="ghost" size="icon" aria-label="Next problem" disabled={atLast} onClick={() => onNavigate(displayed[pos + 1].source_catalog_id)}>
             <ChevronRight className="size-5" />
           </Button>
         </div>
@@ -326,7 +319,7 @@ export function ProblemDetail({
         onSaved={() => {
           // The send consumed the pending tries — clear them so they aren't ALSO
           // flushed as a separate unsent-attempt row.
-          setPendingProblemId(null)
+          setPendingProblem(null)
           setPendingTries(0)
         }}
       />

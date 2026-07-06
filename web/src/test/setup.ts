@@ -4,6 +4,13 @@ import '@testing-library/jest-dom/vitest'
 import { afterEach } from 'vitest'
 import { cleanup } from '@testing-library/react'
 
+// jsdom defines scrollTo only as a throwing "Not implemented" stub; TanStack Router
+// calls it during navigation (scroll restoration). Replace it with a no-op so
+// route-level tests don't log the error.
+if (typeof window !== 'undefined') {
+  window.scrollTo = (() => {}) as typeof window.scrollTo
+}
+
 afterEach(() => {
   cleanup()
 })

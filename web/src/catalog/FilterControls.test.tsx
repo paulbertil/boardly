@@ -1,9 +1,8 @@
-import { fireEvent, render, renderHook, screen, act } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 import { boardByLayoutId } from '../board/boards'
 import { DEFAULT_FILTERS, type FilterState } from './filters'
 import { FilterControls } from './FilterControls'
-import { useFilters } from './useFilters'
 
 const gradeSpan: [number, number] = [3, 15]
 const board = boardByLayoutId(7)!
@@ -43,25 +42,5 @@ describe('FilterControls', () => {
     const { onChange } = setup({ benchmarkOnly: true })
     fireEvent.click(screen.getByRole('button', { name: /reset filters/i }))
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ benchmarkOnly: false }))
-  })
-})
-
-describe('useFilters', () => {
-  beforeEach(() => localStorage.clear())
-
-  it('persists filter state per slab and reloads it', () => {
-    const { result, rerender } = renderHook(({ l, a }) => useFilters(l, a), {
-      initialProps: { l: 7, a: 40 },
-    })
-    act(() => result.current[1]({ ...DEFAULT_FILTERS, benchmarkOnly: true }))
-    expect(result.current[0].benchmarkOnly).toBe(true)
-
-    // A different slab starts clean...
-    rerender({ l: 5, a: 25 })
-    expect(result.current[0].benchmarkOnly).toBe(false)
-
-    // ...and returning restores the persisted state.
-    rerender({ l: 7, a: 40 })
-    expect(result.current[0].benchmarkOnly).toBe(true)
   })
 })

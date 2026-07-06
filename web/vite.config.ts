@@ -16,6 +16,15 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      workbox: {
+        // History routing: serve the app shell for any client-side route so a
+        // deep link (e.g. /board/7/catalog?...) or the OAuth return survives a
+        // hard load. The hash fragment (#access_token=…) is client-side only, so
+        // detectSessionInUrl still sees it. Hashed build assets are excluded so
+        // they resolve to the real file, not index.html.
+        navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/assets\//],
+      },
       manifest: {
         name: 'MoonBoard LED',
         short_name: 'MoonBoard',
