@@ -5,18 +5,40 @@
 // Bluetooth-capable browser (Bluefy) that isn't already app-like. Dismissal is
 // remembered (best-effort).
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Maximize, Menu, X } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { FULLSCREEN_TIP_DISMISSED_KEY, safeGetItem, safeSetItem, shouldOfferFullscreenTip } from '@/lib/pwa'
+import {
+  FULLSCREEN_TIP_DISMISSED_KEY,
+  isFullscreen,
+  safeGetItem,
+  safeSetItem,
+  shouldOfferFullscreenTip,
+} from '@/lib/pwa'
 
 export function InstallBanner() {
-  // Both evaluated once at mount: the environment can't change within a session.
+  // Environment (iOS/BLE) can't change within a session — evaluate once.
   const [offer] = useState(shouldOfferFullscreenTip)
   const [dismissed, setDismissed] = useState(() => safeGetItem(FULLSCREEN_TIP_DISMISSED_KEY) === '1')
+  // Fullscreen CAN change mid-session (that's the whole point of the tip), so track
+  // it reactively and retire the tip once achieved. Best-effort: only fires if the
+  // browser reports fullscreen via the Fullscreen API or display-mode media query.
+  const [fullscreen, setFullscreen] = useState(isFullscreen)
 
-  if (!offer || dismissed) return null
+  useEffect(() => {
+    if (!offer || dismissed) return
+    const update = () => setFullscreen(isFullscreen())
+    document.addEventListener('fullscreenchange', update)
+    const mq = window.matchMedia?.('(display-mode: fullscreen)')
+    mq?.addEventListener?.('change', update)
+    return () => {
+      document.removeEventListener('fullscreenchange', update)
+      mq?.removeEventListener?.('change', update)
+    }
+  }, [offer, dismissed])
+
+  if (!offer || dismissed || fullscreen) return null
 
   const dismiss = () => {
     safeSetItem(FULLSCREEN_TIP_DISMISSED_KEY, '1')
