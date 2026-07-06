@@ -37,9 +37,15 @@ export function hasWebBluetooth(): boolean {
 /**
  * Show the "open in Bluefy" banner: on an iPhone/iPad in a browser that can't do
  * Bluetooth at all (Safari, in-app webviews). The board can't connect here.
+ *
+ * Suppressed once running standalone: Safari can add this app to the Home Screen
+ * (our own apple-mobile-web-app-capable meta enables it), and that WKWebView also
+ * lacks Web Bluetooth — but it has no browser chrome to "open in Bluefy" with, so
+ * a banner there is a non-dismissable dead-end. The user sees this advice in the
+ * Safari tab *before* installing; we don't strand it on-screen after.
  */
 export function shouldShowBleBrowserPrompt(): boolean {
-  return isIosLike() && !hasWebBluetooth()
+  return isIosLike() && !hasWebBluetooth() && !isStandalone()
 }
 
 /**

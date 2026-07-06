@@ -4,8 +4,9 @@
 // a safe-zone inset, so we composite the (non-square, transparent) mark onto a
 // solid #111111 square with per-target padding and commit the PNGs.
 //
-// Dev-only, run manually after the brand mark changes:
-//   cd web && npm i -D sharp && node scripts/generate-icons.mjs
+// Dev-only, run manually after the brand mark changes (sharp is a committed
+// devDependency, so a plain `npm install` already provides it):
+//   cd web && node scripts/generate-icons.mjs
 //
 // Outputs (committed): public/apple-touch-icon.png, public/pwa-192.png,
 // public/pwa-512.png.

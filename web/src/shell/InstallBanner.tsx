@@ -27,9 +27,10 @@ export function InstallBanner() {
         <div className="min-w-0 flex-1 space-y-1">
           <p className="font-medium">Add MoonBoard to your Home Screen</p>
           <p className="text-muted-foreground">
-            Tap the <Share className="inline size-4 align-text-bottom" /> Share menu, then{' '}
+            Tap the <Share aria-hidden className="inline size-4 align-text-bottom" /> Share menu,
+            then{' '}
             <span className="whitespace-nowrap">
-              <Plus className="inline size-4 align-text-bottom" /> Add to Home Screen
+              <Plus aria-hidden className="inline size-4 align-text-bottom" /> Add to Home Screen
             </span>{' '}
             — you’ll get a full-screen app that still connects to your board.
           </p>
@@ -37,7 +38,7 @@ export function InstallBanner() {
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label="Dismiss"
+          aria-label="Dismiss Add to Home Screen banner"
           onClick={dismiss}
           className="-mr-1 shrink-0"
         >

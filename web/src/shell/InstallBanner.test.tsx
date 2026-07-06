@@ -65,7 +65,7 @@ describe('InstallBanner', () => {
   it('dismisses and remembers the choice', () => {
     stubEnv({ ua: IPHONE_UA, ble: true })
     render(<InstallBanner />)
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss Add to Home Screen banner' }))
     expect(screen.queryByRole('region', name)).toBeNull()
     expect(localStorage.getItem(INSTALL_DISMISSED_KEY)).toBe('1')
   })

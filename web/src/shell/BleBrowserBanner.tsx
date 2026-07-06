@@ -19,7 +19,7 @@ export function BleBrowserBanner() {
       className="border-destructive/40 bg-destructive/5"
     >
       <CardContent className="flex items-start gap-3 text-sm">
-        <Bluetooth className="mt-0.5 size-5 shrink-0 text-destructive" />
+        <Bluetooth aria-hidden className="mt-0.5 size-5 shrink-0 text-destructive" />
         <div className="space-y-1">
           <p className="font-medium text-destructive">This browser can’t connect to Bluetooth</p>
           <p className="text-muted-foreground">

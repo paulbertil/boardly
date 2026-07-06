@@ -3,6 +3,8 @@ import {
   hasWebBluetooth,
   isIosLike,
   isStandalone,
+  safeGetItem,
+  safeSetItem,
   shouldOfferInstall,
   shouldShowBleBrowserPrompt,
 } from './pwa'
@@ -98,6 +100,11 @@ describe('shouldShowBleBrowserPrompt', () => {
     expect(shouldShowBleBrowserPrompt()).toBe(false)
   })
 
+  it('false once installed to the Home Screen (no chrome to act on the banner)', () => {
+    stubEnv({ ua: IPHONE_UA, ble: false, standalone: true })
+    expect(shouldShowBleBrowserPrompt()).toBe(false)
+  })
+
   it('false on desktop', () => {
     stubEnv({ ua: MAC_UA, touch: 0, ble: false })
     expect(shouldShowBleBrowserPrompt()).toBe(false)
@@ -123,5 +130,27 @@ describe('shouldOfferInstall', () => {
   it('false on desktop', () => {
     stubEnv({ ua: MAC_UA, touch: 0, ble: true })
     expect(shouldOfferInstall()).toBe(false)
+  })
+})
+
+describe('safeGetItem / safeSetItem', () => {
+  it('round-trips through localStorage', () => {
+    safeSetItem('k', 'v')
+    expect(safeGetItem('k')).toBe('v')
+    localStorage.clear()
+  })
+
+  it('degrades to null / no-op when localStorage throws (restricted embedder)', () => {
+    // Bluefy and Safari private mode can throw on the property access itself.
+    const get = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('SecurityError')
+    })
+    const set = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('SecurityError')
+    })
+    expect(() => safeSetItem('k', 'v')).not.toThrow()
+    expect(safeGetItem('k')).toBeNull()
+    get.mockRestore()
+    set.mockRestore()
   })
 })
