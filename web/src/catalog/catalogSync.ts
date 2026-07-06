@@ -116,6 +116,29 @@ export async function syncSlab(layoutId: number, angle: number): Promise<SyncRes
   return { problems: await readSlab(layoutId, angle), synced }
 }
 
+/**
+ * Look up cached catalog problems by their stable ids (primary key), returning a map
+ * keyed by `source_catalog_id`. Used to enrich logbook rows with setter/benchmark/holds
+ * — an offline, board-agnostic lookup. Missing ids (user problems, uncached entries)
+ * are simply absent from the map, so callers fall back gracefully.
+ */
+export async function getCatalogProblemsByIds(
+  ids: string[],
+): Promise<Map<string, CatalogProblem>> {
+  const result = new Map<string, CatalogProblem>()
+  const unique = [...new Set(ids)]
+  if (unique.length === 0) return result
+  const db = await openDB()
+  const tx = db.transaction(STORE, 'readonly')
+  const store = tx.objectStore(STORE)
+  const found = await Promise.all(unique.map((id) => requestResult<CatalogProblem | undefined>(store.get(id))))
+  db.close()
+  for (const problem of found) {
+    if (problem) result.set(problem.source_catalog_id, problem)
+  }
+  return result
+}
+
 /** Read a slab's cached problems from IndexedDB (used offline and after a sync). */
 export async function readSlab(layoutId: number, angle: number): Promise<CatalogProblem[]> {
   const db = await openDB()

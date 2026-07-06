@@ -157,4 +157,6 @@ body {
 @theme {
   --color-benchmark: oklch(0.77 0.16 75);
   --color-favorite: oklch(0.65 0.22 5);
+  /* Softer-than-graded vote arrow (green); the harder vote reuses --destructive. */
+  --color-success: oklch(0.7 0.17 145);
 }

@@ -4,12 +4,21 @@ import { AccountMenu } from './auth/AccountMenu'
 import { useBoardStore } from './board/boardStore'
 import { CatalogScreen } from './catalog/CatalogScreen'
 import { clearSearch } from './catalog/searchStore'
+import { LogbookScreen } from './logbook/LogbookScreen'
 import { MyBoards } from './shell/MyBoards'
 import { Navigation, type NavView } from './shell/Navigation'
 
 function App() {
   const { addedBoards, activeBoard } = useBoardStore()
   const [view, setView] = useState<NavView>('catalog')
+  // The last home screen (Boards / Logbook) visited before entering the catalog — the
+  // one tab the collapsed catalog nav shows on the left.
+  const [origin, setOrigin] = useState<'boards' | 'logbook'>('boards')
+
+  const navigate = (next: NavView) => {
+    if (next === 'boards' || next === 'logbook') setOrigin(next)
+    setView(next)
+  }
 
   // Search is transient per board — switching the active board must not carry a
   // stale query onto a different board's catalog.
@@ -35,8 +44,14 @@ function App() {
         </header>
         {effectiveView === 'catalog' && <CatalogScreen />}
         {effectiveView === 'boards' && <MyBoards onActivated={() => setView('catalog')} />}
+        {effectiveView === 'logbook' && <LogbookScreen />}
       </main>
-      <Navigation view={effectiveView} onNavigate={setView} disabled={noBoards ? ['catalog'] : []} />
+      <Navigation
+        view={effectiveView}
+        onNavigate={navigate}
+        origin={origin}
+        disabled={noBoards ? ['catalog'] : []}
+      />
     </div>
   )
 }
