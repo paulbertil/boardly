@@ -13,6 +13,7 @@ import { useAuth } from '../auth/AuthProvider'
 import type { CatalogBoardDef } from '../board/boards'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Toggle } from '@/components/ui/toggle'
 import {
   Drawer,
   DrawerContent,
@@ -204,28 +205,12 @@ export function AddToListSheet({ open, onOpenChange, sourceCatalogId, board }: A
 
         {/* New list — inline name → create + add the current problem. */}
         <form
-          className="flex flex-col gap-2 border-t border-border px-3 py-3"
+          className="flex flex-col gap-3 border-t border-border px-3 py-3"
           onSubmit={(e) => {
             e.preventDefault()
             void handleCreate()
           }}
         >
-          {/* Quick-fill suggestions — only while the field is empty. Tapping fills the
-              input (doesn't submit) so the name is still editable. */}
-          {trimListName(newName).length === 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {NAME_SUGGESTIONS.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setNewName(s)}
-                  className="rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          )}
           <div className="flex gap-2">
             <Input
               value={newName}
@@ -238,6 +223,31 @@ export function AddToListSheet({ open, onOpenChange, sourceCatalogId, board }: A
               <Bookmark className="size-4" />
               Save
             </Button>
+          </div>
+
+          {/* Quick-fill suggestions — a single-select group under the input, built from the
+              same shadcn Toggle as MyBoards' hold-set picker. Tapping a pill fills the input
+              (doesn't submit) and presses it; tapping the active pill clears it. Typing a
+              custom name leaves every pill unpressed. Pills stay visible regardless of input
+              so the group reads as a persistent chooser. */}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">Suggestions</span>
+            <div className="flex flex-wrap gap-1.5">
+              {NAME_SUGGESTIONS.map((s) => {
+                const selected = trimListName(newName) === s
+                return (
+                  <Toggle
+                    key={s}
+                    size="sm"
+                    variant="outline"
+                    pressed={selected}
+                    onPressedChange={() => setNewName(selected ? '' : s)}
+                  >
+                    {s}
+                  </Toggle>
+                )
+              })}
+            </div>
           </div>
         </form>
       </DrawerContent>
