@@ -363,7 +363,12 @@ export function ProblemDetail({
       />
       <SignInDialog
         open={signInOpen}
-        onOpenChange={setSignInOpen}
+        onOpenChange={(o) => {
+          setSignInOpen(o)
+          // Dialog dismissed WITHOUT a successful sign-in → drop the pending resume so a
+          // later, unrelated sign-in elsewhere never auto-opens the sheet on this problem.
+          if (!o && !signedIn) setResumeAddToList(false)
+        }}
         title={resumeAddToList ? 'Sign in to save to a list' : 'Sign in to log ascents'}
       />
       <AddToListSheet

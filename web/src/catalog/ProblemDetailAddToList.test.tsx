@@ -36,6 +36,19 @@ vi.mock('../lists/AddToListSheet', () => ({
   AddToListSheet: ({ open }: { open: boolean }) => (open ? <div>ADD_TO_LIST_SHEET</div> : null),
 }))
 
+// Stub the sign-in dialog with a controllable dismiss so we can close it without a sign-in.
+vi.mock('../auth/SignInDialog', () => ({
+  SignInDialog: ({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) =>
+    open ? (
+      <div>
+        <span>Sign in to log ascents</span>
+        <button type="button" onClick={() => onOpenChange(false)}>
+          DISMISS_SIGNIN
+        </button>
+      </div>
+    ) : null,
+}))
+
 const board = boardByLayoutId(7)!
 
 function problem(id: string, name: string): CatalogProblem {
@@ -112,5 +125,28 @@ describe('ProblemDetail — save-to-list trigger', () => {
       />,
     )
     expect(screen.getByText('ADD_TO_LIST_SHEET')).toBeInTheDocument()
+  })
+
+  it('does NOT resume the sheet if the dialog was dismissed without signing in (#2)', () => {
+    const { rerender } = mount()
+    fireEvent.click(screen.getByRole('button', { name: 'Save to list' }))
+    expect(screen.getByText('Sign in to log ascents')).toBeInTheDocument()
+
+    // Dismiss the dialog without signing in — the pending intent must be cleared.
+    fireEvent.click(screen.getByRole('button', { name: 'DISMISS_SIGNIN' }))
+
+    // A later, unrelated sign-in must NOT auto-open the add-to-list sheet.
+    authState.status = 'signedInWithProfile'
+    rerender(
+      <ProblemDetail
+        problem={p}
+        displayed={[p]}
+        board={board}
+        angle={40}
+        favoriteIds={new Set()}
+        onNavigate={() => {}}
+      />,
+    )
+    expect(screen.queryByText('ADD_TO_LIST_SHEET')).toBeNull()
   })
 })
