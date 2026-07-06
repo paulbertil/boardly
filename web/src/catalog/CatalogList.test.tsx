@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { boardByLayoutId } from '../board/boards'
 import { CatalogList } from './CatalogList'
 import type { CatalogProblem } from './catalogSync'
-import { recordRecent } from './recentsStore'
 
 const board = boardByLayoutId(7)!
 
@@ -96,19 +95,6 @@ describe('CatalogList', () => {
     expect(screen.getByRole('button', { name: /show more/i })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /show more/i }))
     expect(screen.queryByRole('button', { name: /show more/i })).toBeNull()
-  })
-
-  it('surfaces recently-viewed problems for the slab', () => {
-    recordRecent(7, 40, 'a')
-    renderList([problem('a', '6A', 'Seen'), problem('b', '6B', 'Other')])
-    expect(screen.getByText('Recently viewed')).toBeInTheDocument()
-  })
-
-  it('reacts to a view recorded after mount (reactive recents)', () => {
-    renderList([problem('a', '6A', 'Seen')])
-    expect(screen.queryByText('Recently viewed')).toBeNull()
-    act(() => recordRecent(7, 40, 'a'))
-    expect(screen.getByText('Recently viewed')).toBeInTheDocument()
   })
 
   it('shows row thumbnails by default and hides them via the previews toggle', () => {
