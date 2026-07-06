@@ -110,7 +110,7 @@ export function LogbookScreen() {
         {header}
         <EmptyState
           title="No logged ascents yet"
-          body="Log a climb from a problem — here or in the MoonBoard app — and it'll show up in your logbook."
+          body="When you log tries or an ascent, it'll show up in your logbook."
         />
         {error && <ErrorNote error={error} />}
       </div>
