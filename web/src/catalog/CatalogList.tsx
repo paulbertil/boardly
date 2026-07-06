@@ -1,15 +1,13 @@
-// The catalog list for one board+angle slab: a "Recently viewed" section, the
-// problems (lazy-paginated), and the distinct empty/loading/offline states.
-// Slab data (problems/loading/degraded) is supplied by the parent (CatalogScreen,
-// which owns the single useSlab); sorting/filtering is layered on via the optional
-// `transform` prop (defaults to the grade-ordinal sort).
+// The catalog list for one board+angle slab: the problems (lazy-paginated) and the
+// distinct empty/loading/offline states. Recently-viewed lives in the RecentsSheet
+// FAB (CatalogScreen), not here. Slab data (problems/loading/degraded) is supplied
+// by the parent (CatalogScreen, which owns the single useSlab); sorting/filtering
+// is layered on via the optional `transform` prop (defaults to the grade-ordinal sort).
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { LayoutGrid } from 'lucide-react'
 import type { CatalogBoardDef } from '../board/boards'
 import { CatalogRow } from './CatalogRow'
-import { RecentlyViewed } from './RecentlyViewed'
-import { clearRecents, useRecents } from './recentsStore'
 import { toggleShowPreviews, useShowPreviews } from './previewsStore'
 import { DEFAULT_FILTERS, applyFilters, type FilterContext } from './filters'
 import type { CatalogProblem } from './catalogSync'
@@ -33,8 +31,8 @@ interface CatalogListProps {
   favoriteIds?: Set<string>
   /** Filter/sort the slab's problems (U9). Defaults to grade-ordinal sort. */
   transform?: (problems: CatalogProblem[]) => CatalogProblem[]
-  /** A search query is narrowing the list — hides "Recently viewed" and points
-      the empty state at the search ✕ (not the filters, which search bypasses). */
+  /** A search query is narrowing the list — points the empty state at the search
+      ✕ (not the filters, which search bypasses). */
   searchActive?: boolean
   /** "col-row" positions from the active holds filter to ring on thumbnails. */
   highlightHolds?: Set<string>
@@ -76,14 +74,6 @@ export function CatalogList({
     io.observe(el)
     return () => io.disconnect()
   }, [displayed.length])
-
-  const recentIds = useRecents(board.layoutId, angle)
-  const recentProblems = useMemo(() => {
-    const byId = new Map(problems.map((p) => [p.source_catalog_id, p]))
-    return recentIds
-      .map((id) => byId.get(id))
-      .filter((p): p is CatalogProblem => p !== undefined)
-  }, [problems, recentIds])
 
   const onSelectProblem = onSelect ?? (() => {})
 
@@ -130,16 +120,6 @@ export function CatalogList({
         >
           Offline — showing cached problems
         </div>
-      )}
-      {!searchActive && (
-        <RecentlyViewed
-          problems={recentProblems}
-          board={board}
-          favoriteIds={favoriteIds}
-          showThumbnails={showThumbnails}
-          onSelect={onSelectProblem}
-          onClear={() => clearRecents(board.layoutId, angle)}
-        />
       )}
       <div className="flex items-center justify-between px-3 py-1 text-xs text-muted-foreground">
         <span>{displayed.length} problems</span>
