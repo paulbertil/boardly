@@ -22,7 +22,7 @@ export function InstallBanner() {
   }
 
   return (
-    <Card role="region" aria-label="Add to Home Screen" className="border-primary/30">
+    <Card role="region" aria-label="Add to Home Screen" className="shrink-0 border-primary/30">
       <CardContent className="flex items-start gap-3 text-sm">
         <div className="min-w-0 flex-1 space-y-1">
           <p className="font-medium">Add MoonBoard to your Home Screen</p>

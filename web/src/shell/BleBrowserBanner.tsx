@@ -16,7 +16,7 @@ export function BleBrowserBanner() {
     <Card
       role="region"
       aria-label="Bluetooth not supported"
-      className="border-destructive/40 bg-destructive/5"
+      className="shrink-0 border-destructive/40 bg-destructive/5"
     >
       <CardContent className="flex items-start gap-3 text-sm">
         <Bluetooth aria-hidden className="mt-0.5 size-5 shrink-0 text-destructive" />
