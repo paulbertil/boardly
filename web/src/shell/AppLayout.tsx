@@ -16,6 +16,8 @@ import { AccountMenu } from '../auth/AccountMenu'
 import { useBoardStore } from '../board/boardStore'
 import { catalogNavTarget } from '../catalog/catalogNav'
 import { Navigation, type NavView } from './Navigation'
+import { BleBrowserBanner } from './BleBrowserBanner'
+import { InstallBanner } from './InstallBanner'
 import { CATALOG_SEARCH_DEFAULTS, type CatalogSearch } from '../catalog/catalogSearch'
 
 const Q_DEBOUNCE_MS = 250
@@ -111,6 +113,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
   return (
     <div className="app-shell">
       <main className="app-scroll overflow-x-hidden">
+        <BleBrowserBanner />
+        <InstallBanner />
         <header className="mb-3 flex items-center justify-end gap-2">
           <AccountMenu />
         </header>
