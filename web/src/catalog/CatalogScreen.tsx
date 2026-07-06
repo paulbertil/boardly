@@ -8,6 +8,7 @@ import { getActiveHoldSetsRaw, getAngle, useBoardStore } from '../board/boardSto
 import { holdSetContext, isClimbable } from '../board/holdSetMembership'
 import { CatalogList } from './CatalogList'
 import { FilterSheet } from './FilterSheet'
+import { RecentsSheet } from './RecentsSheet'
 import { ProblemDetail } from './ProblemDetail'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
 import { applyFilters, type FilterContext } from './filters'
@@ -28,7 +29,10 @@ export function CatalogScreen() {
   const [filters, setFilters] = useFilters(board.layoutId, angle)
   const searchQuery = useSearchQuery()
   const { favoriteIds } = useFavorites()
-  const [openIndex, setOpenIndex] = useState<number | null>(null)
+  // The detail pager's source list + starting index. List taps page over the
+  // filtered `displayed`; recent taps page over the full unfiltered `problems`
+  // slab, so a recent opens regardless of the active filters (iOS parity).
+  const [openTarget, setOpenTarget] = useState<{ list: CatalogProblem[]; index: number } | null>(null)
 
   // The slab's actual grade span (ordinal) for the slider, and its methods.
   const gradeSpan = useMemo<[number, number]>(() => {
@@ -57,9 +61,16 @@ export function CatalogScreen() {
   // Ring the actively-filtered holds on thumbnails + the detail board (iOS parity).
   const highlightHolds = useMemo(() => new Set(filters.holdsFilter), [filters.holdsFilter])
 
+  // List taps: page over the filtered list.
   const openProblem = (problem: CatalogProblem) => {
     const i = displayed.findIndex((p) => p.source_catalog_id === problem.source_catalog_id)
-    if (i >= 0) setOpenIndex(i)
+    if (i >= 0) setOpenTarget({ list: displayed, index: i })
+  }
+
+  // Recent taps: page over the full slab, so it opens even when filtered out.
+  const openRecent = (problem: CatalogProblem) => {
+    const i = problems.findIndex((p) => p.source_catalog_id === problem.source_catalog_id)
+    if (i >= 0) setOpenTarget({ list: problems, index: i })
   }
 
   return (
@@ -76,21 +87,27 @@ export function CatalogScreen() {
         highlightHolds={highlightHolds}
         onSelect={openProblem}
       />
-      <FilterSheet state={filters} onChange={setFilters} board={board} gradeSpan={gradeSpan} methods={methods} />
+      {/* Shared FAB column: recents on top, filter below (mirrors iOS's VStack).
+          mt-auto pins it to the bottom of the flex-column scroll region; sticky
+          keeps it there as a long list scrolls; pointer-events fall through. */}
+      <div className="pointer-events-none sticky bottom-4 z-30 mt-auto flex flex-col items-end gap-3">
+        <RecentsSheet board={board} angle={angle} problems={problems} favoriteIds={favoriteIds} onSelect={openRecent} />
+        <FilterSheet state={filters} onChange={setFilters} board={board} gradeSpan={gradeSpan} methods={methods} />
+      </div>
 
-      <Drawer open={openIndex !== null} onOpenChange={(open) => !open && setOpenIndex(null)} showSwipeHandle>
+      <Drawer open={openTarget !== null} onOpenChange={(open) => !open && setOpenTarget(null)} showSwipeHandle>
         <DrawerContent>
           <DrawerTitle className="sr-only">Problem details</DrawerTitle>
-          {openIndex !== null && (
+          {openTarget !== null && (
             <div className="max-h-[85vh] overflow-y-auto px-4 pt-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
               <ProblemDetail
-                problems={displayed}
-                initialIndex={openIndex}
+                problems={openTarget.list}
+                initialIndex={openTarget.index}
                 board={board}
                 angle={angle}
                 favoriteIds={favoriteIds}
                 highlightHolds={highlightHolds}
-                onClose={() => setOpenIndex(null)}
+                onClose={() => setOpenTarget(null)}
               />
             </div>
           )}
