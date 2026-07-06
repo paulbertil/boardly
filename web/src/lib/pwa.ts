@@ -35,6 +35,18 @@ export function hasWebBluetooth(): boolean {
 }
 
 /**
+ * Whether the page is currently full-screen — either via the Fullscreen API
+ * (`document.fullscreenElement`) or `display-mode: fullscreen`. Best-effort:
+ * iOS WKWebView browsers (Bluefy) hide their own chrome natively and may signal
+ * neither, in which case this stays false and the tip relies on its dismiss button.
+ */
+export function isFullscreen(): boolean {
+  if (typeof document !== 'undefined' && document.fullscreenElement) return true
+  if (typeof window === 'undefined') return false
+  return window.matchMedia?.('(display-mode: fullscreen)').matches ?? false
+}
+
+/**
  * Show the "open in Bluefy" banner: on an iPhone/iPad in a browser that can't do
  * Bluetooth at all (Safari, in-app webviews). The board can't connect here.
  *
