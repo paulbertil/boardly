@@ -9,7 +9,7 @@ import { SignInPanel } from '../auth/SignInPanel'
 import { useBoardStore } from '../board/boardStore'
 import { getCatalogProblemsByIds, type CatalogProblem } from '../catalog/catalogSync'
 import { Skeleton } from '@/components/ui/skeleton'
-import { loadAscents, resetAscents, useAscents, type Ascent } from './ascents'
+import { useEnsureAscentsLoaded, type Ascent } from './ascents'
 import { AscentRow } from './AscentRow'
 import { GradePyramid } from './GradePyramid'
 import { LogAscentSheet, type LogTarget } from './LogAscentSheet'
@@ -18,20 +18,13 @@ import { sessions } from './sessions'
 export function LogbookScreen() {
   const { status, isRestoring } = useAuth()
   const { activeBoard } = useBoardStore()
-  const { status: dataStatus, ascents, error } = useAscents()
+  // Loads on sign-in / clears on sign-out (the shared auth-gated lifecycle).
+  const { status: dataStatus, ascents, error } = useEnsureAscentsLoaded()
   const signedIn = status !== 'signedOut'
 
   const [target, setTarget] = useState<LogTarget | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [catalogById, setCatalogById] = useState<Map<string, CatalogProblem>>(new Map())
-
-  // Load on sign-in, clear on sign-out. Waits out the initial session restore so we
-  // don't flash the signed-out state for an established user.
-  useEffect(() => {
-    if (isRestoring) return
-    if (signedIn) void loadAscents()
-    else resetAscents()
-  }, [signedIn, isRestoring])
 
   // Enrich rows with cached catalog entries (setter / benchmark / thumbnail).
   useEffect(() => {

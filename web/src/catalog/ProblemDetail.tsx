@@ -256,7 +256,7 @@ export function ProblemDetail({
               <BadgeCheck className="size-3.5 shrink-0 text-benchmark" aria-label="Benchmark" />
             )}
             {isSent && (
-              <CheckCircle2 className="size-3.5 shrink-0 text-success" aria-label="Sent" />
+              <CheckCircle2 role="img" aria-label="Sent" className="size-3.5 shrink-0 text-success" />
             )}
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">

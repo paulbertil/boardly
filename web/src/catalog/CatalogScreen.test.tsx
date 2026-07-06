@@ -5,6 +5,8 @@ import { recordRecent } from './recentsStore'
 import { addBoard } from '../board/boardStore'
 import { renderWithRouter } from '../test/renderWithRouter'
 import { useSlab } from './useSlab'
+import { useEnsureAscentsLoaded } from '../logbook/ascents'
+import type { Ascent } from '../logbook/ascents'
 
 // Board 7 / angle 40 is the default board+angle (board 7's only angle is 40).
 const LAYOUT = 7
@@ -46,6 +48,31 @@ const SLAB = [
 
 // Feed CatalogScreen a controllable slab instead of the async cache/sync layer.
 vi.mock('./useSlab', () => ({ useSlab: vi.fn() }))
+
+// Control the logbook store the sent-check derives from. addAttemptTries is also
+// exported here (used by ProblemDetail when a problem opens), so the mock keeps it.
+vi.mock('../logbook/ascents', () => ({
+  useEnsureAscentsLoaded: vi.fn(() => ({ status: 'loaded', ascents: [], error: null })),
+  addAttemptTries: vi.fn(),
+}))
+
+function ascent(over: Partial<Ascent> = {}): Ascent {
+  return {
+    id: 'x',
+    date: '2026-01-01T00:00:00.000Z',
+    sourceCatalogId: 'a',
+    userProblemId: null,
+    problemName: 'Visible',
+    problemGrade: '6B',
+    votedGrade: '6B',
+    tries: 1,
+    stars: 0,
+    comment: '',
+    sent: true,
+    boardLayoutId: LAYOUT,
+    ...over,
+  }
+}
 
 // ProblemDetail (opened by tapping a recent) reaches for Web Bluetooth.
 vi.mock('../ble/useBle', () => ({
@@ -132,6 +159,42 @@ describe('CatalogScreen — deep-linked problem loading', () => {
     // The slab hasn't resolved, so the drawer opens on a spinner rather than nothing.
     expect(await screen.findByTestId('problem-pending')).toBeInTheDocument()
     expect(screen.getByText('Loading problem…')).toBeInTheDocument()
+  })
+})
+
+describe('CatalogScreen — sent indicator', () => {
+  // Scope the "Sent" check lookup to a named row, since several rows render.
+  const rowFor = (name: string) => screen.getByText(name).closest('button') as HTMLElement
+
+  it('checks only board-scoped true sends — not attempts or other-board sends', async () => {
+    vi.mocked(useEnsureAscentsLoaded).mockReturnValue({
+      status: 'loaded',
+      error: null,
+      ascents: [
+        ascent({ sourceCatalogId: 'a', sent: true, boardLayoutId: LAYOUT }), // sent, this board
+        ascent({ sourceCatalogId: 'b', sent: false, boardLayoutId: LAYOUT }), // attempt only
+        ascent({ sourceCatalogId: 'c', sent: true, boardLayoutId: LAYOUT + 1 }), // sent, other board
+      ],
+    })
+    addBoard(LAYOUT)
+    renderWithRouter(`/board/${LAYOUT}/catalog`)
+    await screen.findByText('Visible')
+
+    expect(within(rowFor('Visible')).getByLabelText('Sent')).toBeInTheDocument()
+    expect(within(rowFor('HiddenB')).queryByLabelText('Sent')).toBeNull()
+    expect(within(rowFor('HiddenC')).queryByLabelText('Sent')).toBeNull()
+  })
+
+  it('drops ascents with a null catalog id without erroring', async () => {
+    vi.mocked(useEnsureAscentsLoaded).mockReturnValue({
+      status: 'loaded',
+      error: null,
+      ascents: [ascent({ sourceCatalogId: null, sent: true })],
+    })
+    addBoard(LAYOUT)
+    renderWithRouter(`/board/${LAYOUT}/catalog`)
+    await screen.findByText('Visible')
+    expect(within(rowFor('Visible')).queryByLabelText('Sent')).toBeNull()
   })
 })
 

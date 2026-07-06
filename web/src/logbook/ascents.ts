@@ -10,8 +10,9 @@
 //
 // Reactive via useSyncExternalStore, same shape as boardStore / recentsStore.
 
-import { useSyncExternalStore } from 'react'
+import { useEffect, useSyncExternalStore } from 'react'
 import { supabase } from '../supabase/client'
+import { useAuth } from '../auth/AuthProvider'
 import { attemptId } from './attemptId'
 
 export interface Ascent {
@@ -320,4 +321,21 @@ function getSnapshot(): AscentsState {
 /** Reactive view of the logbook store. */
 export function useAscents(): AscentsState {
   return useSyncExternalStore(subscribe, getSnapshot)
+}
+
+/**
+ * Reactive ascents, with the auth-gated load lifecycle attached: loads on sign-in
+ * (after the initial session restore, so an established user doesn't flash signed-out)
+ * and clears on sign-out. Any screen that surfaces sent/logged state uses this so the
+ * "load-if-signed-in / reset-if-not" policy lives in one place, not copied per screen.
+ */
+export function useEnsureAscentsLoaded(): AscentsState {
+  const { status, isRestoring } = useAuth()
+  const signedIn = status !== 'signedOut'
+  useEffect(() => {
+    if (isRestoring) return
+    if (signedIn) void loadAscents()
+    else resetAscents()
+  }, [signedIn, isRestoring])
+  return useAscents()
 }

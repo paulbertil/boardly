@@ -24,8 +24,7 @@ import { filtersToSearch, searchToFilters } from './catalogSearch'
 import { saveSeed } from './filterSeed'
 import { useFavorites } from './favoritesStore'
 import { useSlab } from './useSlab'
-import { useAuth } from '../auth/AuthProvider'
-import { loadAscents, resetAscents, useAscents } from '../logbook/ascents'
+import { useEnsureAscentsLoaded } from '../logbook/ascents'
 import type { CatalogProblem } from './catalogSync'
 
 const routeApi = getRouteApi('/board/$layoutId/catalog')
@@ -56,16 +55,9 @@ export function CatalogScreen() {
   const { favoriteIds } = useFavorites()
 
   // Logged sends → the green "sent" check on rows/detail (iOS parity). The ascents
-  // store is a global singleton the Logbook tab also feeds; load it here too so the
-  // check appears even when the catalog is opened without first visiting the logbook.
-  const { status: authStatus, isRestoring } = useAuth()
-  const signedIn = authStatus !== 'signedOut'
-  const { ascents } = useAscents()
-  useEffect(() => {
-    if (isRestoring) return
-    if (signedIn) void loadAscents()
-    else resetAscents()
-  }, [signedIn, isRestoring])
+  // store is a global singleton the Logbook tab also feeds; ensure it's loaded here too
+  // so the check appears even when the catalog is opened without first visiting the logbook.
+  const { ascents } = useEnsureAscentsLoaded()
   // Board-scoped, mirroring the Logbook tab: a send counts for this board's catalog
   // only. `sent === false` rows (attempts) are excluded — only true sends get the check.
   const sentIds = useMemo(
