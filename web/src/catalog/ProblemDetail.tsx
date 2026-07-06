@@ -6,8 +6,12 @@
 // the filtered set while open (e.g. unfavorited under a favorites-only filter),
 // the pager stays on it rather than jumping — prev/next just disable.
 
-import { useEffect, useRef, useState } from 'react'
-import { BadgeCheck, ChevronLeft, ChevronRight, Heart, Lightbulb, Repeat, Star } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { BadgeCheck, CheckCircle2, ChevronLeft, ChevronRight, Heart, Lightbulb, Repeat, Star } from 'lucide-react'
+import { useAuth } from '../auth/AuthProvider'
+import { SignInDialog } from '../auth/SignInDialog'
+import { addAttemptTries } from '../logbook/ascents'
+import { TryStepper } from '../logbook/TryStepper'
 import { bleClient, connectBoard, isConnected, setBleError, useBle } from '../ble/useBle'
 import { CatalogBoard } from '../board/CatalogBoard'
 import type { CatalogBoardDef } from '../board/boards'
@@ -17,6 +21,7 @@ import type { CatalogHold, CatalogProblem } from './catalogSync'
 import { recordRecent } from './recentsStore'
 import { useFavorites } from './favoritesStore'
 import type { HoldAssignment } from '../types'
+import { LogAscentSheet, type LogTarget } from '../logbook/LogAscentSheet'
 import { Button } from '@/components/ui/button'
 
 interface ProblemDetailProps {
@@ -47,6 +52,15 @@ export function ProblemDetail({
   const [lit, setLit] = useState(false)
   const [lightError, setLightError] = useState<string | null>(null)
   const [busy, setBusy] = useState<'connecting' | 'sending' | null>(null)
+  const { status } = useAuth()
+  const signedIn = status !== 'signedOut'
+  const [logTarget, setLogTarget] = useState<LogTarget | null>(null)
+  const [logOpen, setLogOpen] = useState(false)
+  const [signInOpen, setSignInOpen] = useState(false)
+  // Inline "Log try" stepper state: session-local pending tries for the shown problem,
+  // written (merged) to the unsent-attempt row only when leaving the problem (iOS parity).
+  const [pendingProblemId, setPendingProblemId] = useState<string | null>(null)
+  const [pendingTries, setPendingTries] = useState(0)
 
   const currentId = current?.source_catalog_id
 
@@ -65,6 +79,61 @@ export function ProblemDetail({
   useEffect(() => {
     if (!current) onClose()
   }, [current, onClose])
+
+  // ── Deferred flush of the inline "Log try" stepper (iOS parity) ──────────────
+  // Write/merge the unsent-attempt row only when the user leaves the problem: paging
+  // to another problem, or closing the pager (unmount). Same-day tries accumulate.
+  const flush = useCallback(
+    (problemId: string | null, tries: number) => {
+      if (!problemId || tries <= 0) return
+      const p = problems.find((x) => x.source_catalog_id === problemId)
+      if (!p) return
+      void addAttemptTries({
+        sourceCatalogId: p.source_catalog_id,
+        problemName: p.name,
+        problemGrade: p.grade,
+        boardLayoutId: board.layoutId,
+        date: new Date().toISOString(),
+        addTries: tries,
+      })
+    },
+    [problems, board.layoutId],
+  )
+
+  // Mirror pending state into refs so the navigation/unmount flushes read fresh values
+  // without re-subscribing.
+  const pendingRef = useRef<{ problemId: string | null; tries: number }>({
+    problemId: null,
+    tries: 0,
+  })
+  useEffect(() => {
+    pendingRef.current = { problemId: pendingProblemId, tries: pendingTries }
+  }, [pendingProblemId, pendingTries])
+  const flushRef = useRef(flush)
+  flushRef.current = flush
+
+  // Flush the previous problem's pending tries when the shown problem changes (paging).
+  const shownIdRef = useRef(currentId)
+  useEffect(() => {
+    if (shownIdRef.current !== currentId) {
+      const prev = pendingRef.current
+      if (prev.problemId && prev.problemId !== currentId) {
+        flush(prev.problemId, prev.tries)
+        setPendingProblemId(null)
+        setPendingTries(0)
+      }
+      shownIdRef.current = currentId
+    }
+  }, [currentId, flush])
+
+  // Flush on close/unmount (drawer dismissed → ProblemDetail unmounts).
+  useEffect(
+    () => () => {
+      const { problemId, tries } = pendingRef.current
+      flushRef.current(problemId, tries)
+    },
+    [],
+  )
 
   if (!current) return null
 
@@ -111,6 +180,50 @@ export function ProblemDetail({
 
   const atFirst = pos <= 0
   const atLast = pos < 0 || pos >= problems.length - 1
+
+  // The count shown in the stepper — session-local pending tries for THIS problem only
+  // (starts at 0 each time a problem is shown; not hydrated from existing logs, per iOS).
+  const currentTries = pendingProblemId === current.source_catalog_id ? pendingTries : 0
+
+  function addTry() {
+    if (!signedIn) {
+      setSignInOpen(true)
+      return
+    }
+    if (pendingProblemId !== current!.source_catalog_id) {
+      setPendingProblemId(current!.source_catalog_id)
+      setPendingTries(1)
+    } else {
+      setPendingTries((t) => t + 1)
+    }
+  }
+
+  function removeTry() {
+    if (currentTries <= 0) return
+    setPendingTries((t) => {
+      const next = t - 1
+      if (next === 0) setPendingProblemId(null)
+      return next
+    })
+  }
+
+  // "Log ascent" opens the full sheet as a SEND, pre-seeding tries from the stepper.
+  function logAscent() {
+    if (!signedIn) {
+      setSignInOpen(true)
+      return
+    }
+    setLogTarget({
+      kind: 'create',
+      sourceCatalogId: current!.source_catalog_id,
+      problemName: current!.name,
+      problemGrade: current!.grade,
+      boardLayoutId: board.layoutId,
+      sent: true,
+      tries: Math.max(currentTries, 1),
+    })
+    setLogOpen(true)
+  }
 
   // Side-swipe the board to page prev/next (vertical drags fall through to the
   // drawer's swipe-to-dismiss).
@@ -194,6 +307,27 @@ export function ProblemDetail({
         </Button>
         {lightError && <p className="text-center text-sm text-destructive">{lightError}</p>}
       </div>
+
+      <div className="flex items-center gap-3">
+        <TryStepper count={currentTries} onRemove={removeTry} onAdd={addTry} />
+        <Button size="lg" className="flex-1" onClick={logAscent}>
+          <CheckCircle2 className="size-5" />
+          Log ascent
+        </Button>
+      </div>
+
+      <LogAscentSheet
+        open={logOpen}
+        onOpenChange={setLogOpen}
+        target={logTarget}
+        onSaved={() => {
+          // The send consumed the pending tries — clear them so they aren't ALSO
+          // flushed as a separate unsent-attempt row.
+          setPendingProblemId(null)
+          setPendingTries(0)
+        }}
+      />
+      <SignInDialog open={signInOpen} onOpenChange={setSignInOpen} />
     </div>
   )
 }

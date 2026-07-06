@@ -5,6 +5,7 @@ import type { CatalogProblem } from './catalogSync'
 import { isFavorite } from './favoritesStore'
 import { getRecentIds } from './recentsStore'
 import { ProblemDetail } from './ProblemDetail'
+import { AuthProvider } from '../auth/AuthProvider'
 import * as ble from '../ble/useBle'
 
 vi.mock('../ble/useBle', () => ({
@@ -38,14 +39,16 @@ const list = [problem('a', 'First'), problem('b', 'Middle'), problem('c', 'Last'
 
 function renderDetail(initialIndex: number, problems = list) {
   return render(
-    <ProblemDetail
-      problems={problems}
-      initialIndex={initialIndex}
-      board={board}
-      angle={40}
-      favoriteIds={new Set()}
-      onClose={vi.fn()}
-    />,
+    <AuthProvider>
+      <ProblemDetail
+        problems={problems}
+        initialIndex={initialIndex}
+        board={board}
+        angle={40}
+        favoriteIds={new Set()}
+        onClose={vi.fn()}
+      />
+    </AuthProvider>,
   )
 }
 
@@ -81,14 +84,16 @@ describe('ProblemDetail', () => {
     const { rerender } = renderDetail(1) // showing "Middle"
     // Parent recomputes the list and drops "Middle" (e.g. unfavorited under a filter).
     rerender(
-      <ProblemDetail
-        problems={[list[0], list[2]]}
-        initialIndex={1}
-        board={board}
-        angle={40}
-        favoriteIds={new Set()}
-        onClose={vi.fn()}
-      />,
+      <AuthProvider>
+        <ProblemDetail
+          problems={[list[0], list[2]]}
+          initialIndex={1}
+          board={board}
+          angle={40}
+          favoriteIds={new Set()}
+          onClose={vi.fn()}
+        />
+      </AuthProvider>,
     )
     expect(screen.getByText('Middle')).toBeInTheDocument() // did not jump
     expect(screen.getByRole('button', { name: 'Previous problem' })).toBeDisabled()

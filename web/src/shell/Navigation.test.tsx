@@ -38,6 +38,37 @@ describe('Navigation', () => {
     expect(screen.getByRole('button', { name: 'Search' })).toBeDisabled()
   })
 
+  it('shows both home tabs on a home screen and navigates to Logbook', () => {
+    const onNavigate = vi.fn()
+    render(<Navigation view="boards" onNavigate={onNavigate} />)
+    // Home screens show both tabs (Boards current) plus the Search button.
+    expect(screen.getByRole('button', { name: 'Boards' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Logbook' }))
+    expect(onNavigate).toHaveBeenCalledWith('logbook')
+  })
+
+  it('marks Logbook current when on the logbook view', () => {
+    render(<Navigation view="logbook" onNavigate={() => {}} />)
+    expect(screen.getByRole('button', { name: 'Logbook' })).toHaveAttribute('aria-current', 'page')
+    // Search collapses to a button (not the field) off the catalog.
+    expect(screen.getByRole('button', { name: 'Search' })).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: 'Search problems' })).toBeNull()
+  })
+
+  it('on the catalog shows ONLY the origin tab beside the search field', () => {
+    // Origin = Logbook: the Boards tab is hidden, Logbook is the lone tab, search rightmost.
+    render(<Navigation view="catalog" origin="logbook" onNavigate={() => {}} />)
+    expect(screen.getByRole('textbox', { name: 'Search problems' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Logbook' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Boards' })).toBeNull()
+  })
+
+  it('on the catalog with a Boards origin, hides the Logbook tab', () => {
+    render(<Navigation view="catalog" origin="boards" onNavigate={() => {}} />)
+    expect(screen.getByRole('button', { name: 'Boards' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Logbook' })).toBeNull()
+  })
+
   it('clears the query via the ✕ button', () => {
     render(<Navigation view="catalog" onNavigate={() => {}} />)
     const field = screen.getByRole('textbox', { name: 'Search problems' })
