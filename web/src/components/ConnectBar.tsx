@@ -34,7 +34,7 @@ export function ConnectBar({
         </Button>
       ) : (
         // Web Bluetooth requires the picker to be opened from a user gesture.
-        <Button size="sm" onClick={onConnect} disabled={state === 'connecting'}>
+        <Button size="sm" variant="secondary" onClick={onConnect} disabled={state === 'connecting'}>
           Connect
         </Button>
       )}
