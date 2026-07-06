@@ -4,7 +4,9 @@
 detail. This doc *summarizes and links* — it does not re-explain subsystems. If a section
 here grows into a second copy of a `docs/` file, trim it back to a summary + link.
 
-Pairs with [`README.md`](README.md) (user-facing run guide).
+Pairs with [`README.md`](README.md) (user-facing run guide). Shared domain vocabulary
+(Ascent, Sent, Attempt, Catalog Problem, Board Layout) lives in [`CONCEPTS.md`](CONCEPTS.md) —
+skim it when orienting or discussing domain concepts.
 
 ## What this is
 
