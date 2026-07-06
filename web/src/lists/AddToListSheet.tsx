@@ -7,7 +7,8 @@
 // sonner Retry toast (D3).
 
 import { useEffect, useRef, useState } from 'react'
-import { Bookmark, Check } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
+import { Bookmark, Check, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '../auth/AuthProvider'
 import type { CatalogBoardDef } from '../board/boards'
@@ -17,6 +18,7 @@ import { Toggle } from '@/components/ui/toggle'
 import {
   Drawer,
   DrawerContent,
+  DrawerDescription,
   DrawerHeader,
   DrawerTitle,
 } from '@/components/ui/drawer'
@@ -160,8 +162,9 @@ export function AddToListSheet({ open, onOpenChange, sourceCatalogId, board }: A
   return (
     <Drawer open={open} onOpenChange={onOpenChange} showSwipeHandle>
       <DrawerContent>
-        <DrawerHeader>
+        <DrawerHeader className="pb-2">
           <DrawerTitle>Save to list</DrawerTitle>
+          <DrawerDescription>Pick a list to add this problem to.</DrawerDescription>
         </DrawerHeader>
 
         <div className="max-h-[60vh] space-y-1 overflow-y-auto px-3 pb-2">
@@ -177,27 +180,45 @@ export function AddToListSheet({ open, onOpenChange, sourceCatalogId, board }: A
               const isMember = members.has(list.id)
               const isPending = pendingIds.has(list.id)
               return (
-                <button
+                <div
                   key={list.id}
-                  type="button"
-                  aria-pressed={isMember}
-                  disabled={isPending}
-                  onClick={() => void toggle(list.id, isMember)}
                   className={cn(
-                    'flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left transition-colors hover:bg-accent/50',
+                    'flex items-center rounded-md pr-1 transition-colors hover:bg-accent/50',
                     isPending && 'opacity-60',
                   )}
                 >
-                  <span
-                    className={cn(
-                      'flex size-5 shrink-0 items-center justify-center rounded-full border',
-                      isMember ? 'border-primary bg-primary text-primary-foreground' : 'border-border',
-                    )}
+                  {/* Tapping the row (checkmark + name) toggles membership — the sheet's
+                      primary job. */}
+                  <button
+                    type="button"
+                    aria-pressed={isMember}
+                    aria-label={isMember ? `Remove from ${list.name}` : `Add to ${list.name}`}
+                    disabled={isPending}
+                    onClick={() => void toggle(list.id, isMember)}
+                    className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left"
                   >
-                    {isMember && <Check className="size-3.5" />}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium">{list.name}</span>
-                </button>
+                    <span
+                      className={cn(
+                        'flex size-5 shrink-0 items-center justify-center rounded-full border',
+                        isMember ? 'border-primary bg-primary text-primary-foreground' : 'border-border',
+                      )}
+                    >
+                      {isMember && <Check className="size-3.5" />}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{list.name}</span>
+                  </button>
+                  {/* The chevron opens the list itself; closing the sheet first so it
+                      doesn't linger over the destination route. */}
+                  <Link
+                    to="/lists/$listId"
+                    params={{ listId: list.id }}
+                    onClick={() => onOpenChange(false)}
+                    aria-label={`Open ${list.name}`}
+                    className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    <ChevronRight className="size-4" />
+                  </Link>
+                </div>
               )
             })
           )}
@@ -211,6 +232,9 @@ export function AddToListSheet({ open, onOpenChange, sourceCatalogId, board }: A
             void handleCreate()
           }}
         >
+          {/* Clarifies this section creates a NEW list, distinct from toggling the
+              existing ones above. */}
+          <span className="text-xs font-medium text-muted-foreground">Or save to a new list</span>
           <div className="flex gap-2">
             <Input
               value={newName}

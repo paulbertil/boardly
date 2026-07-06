@@ -38,6 +38,36 @@ vi.mock('./listsSync', () => ({
 const toastError = vi.fn()
 vi.mock('sonner', () => ({ toast: { error: (...a: unknown[]) => toastError(...a) } }))
 
+// Router Link → a plain anchor so the sheet mounts in isolation (no route tree).
+// Forward `to`/`params` as data-attrs so the navigation target is assertable.
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({
+    children,
+    to,
+    params,
+    onClick,
+    ...rest
+  }: {
+    children: React.ReactNode
+    to: string
+    params?: { listId?: string }
+    onClick?: (e: React.MouseEvent) => void
+  } & Record<string, unknown>) => (
+    <a
+      href="#"
+      data-to={to}
+      data-list-id={params?.listId}
+      onClick={(e) => {
+        e.preventDefault()
+        onClick?.(e)
+      }}
+      {...rest}
+    >
+      {children}
+    </a>
+  ),
+}))
+
 const board = boardByLayoutId(7)!
 
 function savedList(id: string, name: string, boardLayoutId: number): SavedList {
@@ -85,6 +115,18 @@ describe('AddToListSheet', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /Sevens/ })).toHaveAttribute('aria-pressed', 'true'),
     )
+  })
+
+  it('each list row links to that list and closes the sheet on navigate', async () => {
+    lists = [savedList('l7', 'Sevens', 7)]
+    const onOpenChange = vi.fn()
+    render(<AddToListSheet open onOpenChange={onOpenChange} sourceCatalogId="cat-1" board={board} />)
+
+    const link = await screen.findByRole('link', { name: 'Open Sevens' })
+    expect(link).toHaveAttribute('data-to', '/lists/$listId')
+    expect(link).toHaveAttribute('data-list-id', 'l7')
+    fireEvent.click(link)
+    expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 
   it('toggling a non-member list adds the problem', async () => {
