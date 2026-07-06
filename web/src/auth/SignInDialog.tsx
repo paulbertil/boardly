@@ -1,5 +1,6 @@
-// Centered sign-in modal, shown when a signed-out user tries to log an ascent. Reuses
-// the exact same SignInPanel as the top-nav Sign in. Closes itself once a session lands.
+// Centered sign-in modal — the single sign-in surface for the whole web app (top-nav
+// "Sign in" and the log-ascent flow both open this). Wraps the shared SignInPanel and
+// closes itself once a session lands. Pass `title` to tailor the copy per entry point.
 
 import { useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
