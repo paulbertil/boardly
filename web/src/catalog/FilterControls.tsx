@@ -15,14 +15,11 @@ import {
   SORT_LABELS,
   STATUS_KEYS,
   STATUS_LABELS,
-  hasActiveFilters,
-  resetFilters,
   sortDimension,
   type FilterState,
   type SortKey,
   type StatusKey,
 } from './filters'
-import { Button } from '@/components/ui/button'
 import {
   Select,
   SelectContent,
@@ -32,6 +29,7 @@ import {
 } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
 import { Toggle } from '@/components/ui/toggle'
+import { cn } from '@/lib/utils'
 
 const SORT_KEYS: SortKey[] = ['easiest', 'hardest', 'rated', 'repeats']
 const RATING_LABELS: Record<string, string> = {
@@ -58,9 +56,17 @@ interface FilterControlsProps {
   signedOut: boolean
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  className,
+  children,
+}: {
+  label: string
+  className?: string
+  children: React.ReactNode
+}) {
   return (
-    <div className="space-y-1.5">
+    <div className={cn('space-y-1.5', className)}>
       <div className="text-xs font-medium text-muted-foreground">{label}</div>
       {children}
     </div>
@@ -96,11 +102,11 @@ export function FilterControls({
   }
 
   return (
-    <div className="space-y-4">
-      <Field label="Sort">
-        <div className="flex gap-2">
+    <div className="space-y-5">
+      <div className="flex gap-2">
+        <Field label="Sort" className="flex-1">
           <Select items={SORT_LABELS} value={state.sortPrimary} onValueChange={(v) => changePrimary(v as SortKey)}>
-            <SelectTrigger className="flex-1">
+            <SelectTrigger className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -111,12 +117,14 @@ export function FilterControls({
               ))}
             </SelectContent>
           </Select>
+        </Field>
+        <Field label="Then by" className="flex-1">
           <Select
             items={secondaryItems}
             value={state.sortSecondary ?? 'none'}
             onValueChange={(v) => set({ sortSecondary: v === 'none' ? null : (v as SortKey) })}
           >
-            <SelectTrigger className="flex-1">
+            <SelectTrigger className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -128,8 +136,8 @@ export function FilterControls({
               ))}
             </SelectContent>
           </Select>
-        </div>
-      </Field>
+        </Field>
+      </div>
 
       <Field label={`Grade · ${FONT_GRADES[range[0]]} – ${FONT_GRADES[range[1]]}`}>
         <Slider
@@ -158,34 +166,17 @@ export function FilterControls({
         </button>
       </Field>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Toggle variant="outline" size="sm" pressed={state.benchmarkOnly} onPressedChange={(v) => set({ benchmarkOnly: v })}>
-          Benchmarks
-        </Toggle>
-        <Toggle variant="outline" size="sm" pressed={state.favoritesOnly} onPressedChange={(v) => set({ favoritesOnly: v })}>
-          Favorites
-        </Toggle>
-        <Select items={RATING_LABELS} value={String(state.minStars)} onValueChange={(v) => set({ minStars: Number(v) })}>
-          <SelectTrigger className="w-32">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {Object.entries(RATING_LABELS).map(([v, label]) => (
-              <SelectItem key={v} value={v}>
-                {label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <Field label="Status">
-        {signedOut && (
-          <div id={statusHintId} className="text-xs text-muted-foreground">
-            Sign in to filter by status
-          </div>
-        )}
-        <div className="flex flex-wrap gap-1.5">
+      {/* Benchmarks, Favorites, and the three ascent-status chips share one flat row
+          (iOS parity); the min-rating select trails them. The sign-in hint sits under
+          the row so it's read before the disabled status chips it describes. */}
+      <Field label="Filter">
+        <div className="flex flex-wrap items-center gap-2">
+          <Toggle variant="outline" size="sm" pressed={state.benchmarkOnly} onPressedChange={(v) => set({ benchmarkOnly: v })}>
+            Benchmarks
+          </Toggle>
+          <Toggle variant="outline" size="sm" pressed={state.favoritesOnly} onPressedChange={(v) => set({ favoritesOnly: v })}>
+            Favorites
+          </Toggle>
           {STATUS_KEYS.map((k) => (
             <Toggle
               key={k}
@@ -205,7 +196,24 @@ export function FilterControls({
               {STATUS_LABELS[k]}
             </Toggle>
           ))}
+          <Select items={RATING_LABELS} value={String(state.minStars)} onValueChange={(v) => set({ minStars: Number(v) })}>
+            <SelectTrigger className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(RATING_LABELS).map(([v, label]) => (
+                <SelectItem key={v} value={v}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
+        {signedOut && (
+          <div id={statusHintId} className="text-xs text-muted-foreground">
+            Sign in to filter by status
+          </div>
+        )}
       </Field>
 
       {methods.length > 0 && (
@@ -226,12 +234,6 @@ export function FilterControls({
             ))}
           </div>
         </Field>
-      )}
-
-      {hasActiveFilters(state, statusReady) && (
-        <Button variant="ghost" size="sm" onClick={() => onChange(resetFilters(state))}>
-          Reset filters
-        </Button>
       )}
 
       <HoldFilterPicker

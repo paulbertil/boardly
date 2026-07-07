@@ -37,15 +37,6 @@ describe('FilterControls', () => {
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ methods: ['Footless'] }))
   })
 
-  it('shows Reset only when a filter is active, and resets on click', () => {
-    setup() // no active filters
-    expect(screen.queryByRole('button', { name: /reset filters/i })).toBeNull()
-
-    const { onChange } = setup({ benchmarkOnly: true })
-    fireEvent.click(screen.getByRole('button', { name: /reset filters/i }))
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ benchmarkOnly: false }))
-  })
-
   it('toggles status chips (multi-select) when signed in', () => {
     const { onChange } = setup({ statusFilters: ['sent'] })
     // 'Sent' already pressed; add 'Not logged'.
@@ -71,9 +62,4 @@ describe('FilterControls', () => {
     expect(screen.queryByText('Sign in to filter by status')).toBeNull()
   })
 
-  it('does not count status toward Reset when signed out (statusReady false)', () => {
-    // A shared ?status= link decodes statusFilters while signed out; Reset must stay hidden.
-    setup({ statusFilters: ['sent'] }, { signedOut: true, statusReady: false })
-    expect(screen.queryByRole('button', { name: /reset filters/i })).toBeNull()
-  })
 })
