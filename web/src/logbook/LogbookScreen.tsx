@@ -19,6 +19,7 @@ import { useEnsureAscentsLoaded, type Ascent } from './ascents'
 import { AscentRow } from './AscentRow'
 import { GradePyramid } from './GradePyramid'
 import { LogAscentSheet, type LogTarget } from './LogAscentSheet'
+import { MoonBoardImportBanner } from './MoonBoardImportBanner'
 import { sessions } from './sessions'
 
 const routeApi = getRouteApi('/logbook')
@@ -208,6 +209,8 @@ export function LogbookScreen() {
   return (
     <div className="flex flex-1 flex-col px-3">
       {header}
+
+      <MoonBoardImportBanner />
 
       {hasSends && (
         <section className="mb-4 rounded-lg border border-border p-3">
