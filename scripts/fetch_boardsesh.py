@@ -49,7 +49,9 @@ BOARDS = {
     4: ("moonboardmasters2017", "MoonBoard Masters 2017","11,12,13,14,15,16",    [40, 25]),
     5: ("moonboardmasters2019", "MoonBoard Masters 2019","17,18,19,20,21,22,23", [40, 25]),
     6: ("minimoonboard2020",    "Mini MoonBoard 2020",   "24,25,26,27",          [40, 25]),
-    7: ("minimoonboard2025",    "Mini MoonBoard 2025",   "28",                   [40, 25]),
+    # Mini 2025 was re-partitioned by boardsesh into setIds 28,29,30,31 (setId "28"
+    # alone now returns only a ~181-problem slice of the full ~4,870).
+    7: ("minimoonboard2025",    "Mini MoonBoard 2025",   "28,29,30,31",          [40, 25]),
 }
 
 LABEL_TO_FONT = {
@@ -71,11 +73,19 @@ ROLE_TO_TYPE = {42: "start", 44: "end", 43: "right"}
 FRAME_TOKEN = re.compile(r"p(\d+)r(\d+)")
 HEADERS = {"Content-Type": "application/json", "User-Agent": "moonboard-led-catalog/1.0"}
 
+# MoonBoard "method" (foot rules), from boardsesh's `characteristics`. Standard
+# problems have no method characteristic. Mirrors fetch_boardsesh_mini2025.py.
+METHOD_LABELS = {
+    "method_no_kickboard": "No kickboard",
+    "method_footless": "Footless",
+    "method_footless_kickboard": "Footless + kickboard",
+}
+
 SEARCH_QUERY = """
 query Search($i: ClimbSearchInput!) {
   searchClimbs(input: $i) {
     totalCount hasMore
-    climbs { uuid name difficulty benchmark_difficulty stars ascensionist_count setter_username frames }
+    climbs { uuid name difficulty benchmark_difficulty stars ascensionist_count setter_username frames characteristics }
   }
 }
 """
@@ -125,12 +135,16 @@ def _fetch_filtered(layout, angle, set_ids, server_filter, delay):
             holds = decode_frames(c.get("frames"))
             if not holds:
                 continue
+            characteristics = c.get("characteristics") or []
+            method = next((METHOD_LABELS[x] for x in characteristics if x in METHOD_LABELS), None)
             out.append({
                 "id": c.get("uuid"), "name": c.get("name") or "Untitled",
                 "grade": font_grade(c.get("difficulty")), "userGrade": None,
                 "setter": c.get("setter_username") or "",
                 "stars": int(round(float(c.get("stars") or 0))),
                 "repeats": c.get("ascensionist_count") or 0, "isBenchmark": bench,
+                # MoonBoard foot-rule method (e.g. "Footless"); null for standard problems.
+                "method": method,
                 "holds": holds,
             })
         if page % 10 == 0:

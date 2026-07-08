@@ -8,8 +8,9 @@ The catalog is **server-distributed**, not bundled: clients no longer ship the p
 They download it lazily per board into a local cache and query it locally, so every client stays
 in sync instead of drifting on divergent bundles. See migration `supabase/migrations/0006_catalog_problems.sql`.
 
-**Key files:** `scripts/fetch_boardsesh*.py` (fetch) + `scripts/import_catalog.py` (upload to
-Supabase), `MoonBoardLED/Catalog/Catalog.swift` (synced disk cache + loading),
+**Key files:** `scripts/fetch_boardsesh*.py` (fetch) + `scripts/enrich_catalog_methods.py`
+(backfill the `method` field onto existing staging JSON without re-fetching) +
+`scripts/import_catalog.py` (upload to Supabase), `MoonBoardLED/Catalog/Catalog.swift` (synced disk cache + loading),
 `MoonBoardLED/Services/Supabase/CatalogSyncManager.swift` (iOS pull),
 `web/src/catalog/catalogSync.ts` (PWA pull), `MoonBoardLED/Board/HoldSetMembership.swift`.
 
@@ -77,7 +78,7 @@ on iOS) rather than a bundled resource:
       "stars": 5,            // rating 0–5
       "repeats": 28,         // ascent count
       "isBenchmark": false,
-      "method": null,        // foot rule, e.g. "Footless", "No kickboard"; may be absent on old data
+      "method": null,        // foot rule: "No kickboard" / "Footless" / "Footless + kickboard", else null
       "holds": [ { "c": 2, "r": 12, "t": "end" }, { "c": 5, "r": 5, "t": "start" } ]
     }
   ]
@@ -104,22 +105,36 @@ why "beta" mode in the app has nothing finer to show for catalog problems).
 ## Regenerating / adding a board
 
 ```bash
-# 1. Fetch problems into the catalog-data/ staging area
-python3 scripts/fetch_boardsesh.py --layout 5 --angle 40    # boards/angles → catalog-data/
-#   useful flags: --all  --min-ascents N  --benchmarks-only  --delay 0.25  --out-dir <path>
+# 1. Fetch problems into the catalog-data/ staging area.
+#    Curation rule for the committed snapshots: "benchmark OR repeats >= 10" — pass BOTH
+#    flags; fetch_boardsesh.py UNIONS them (the benchmark flag alone misses popular problems).
+python3 scripts/fetch_boardsesh.py --layout 5 --angle 40 --benchmarks-only --min-ascents 10
+#   other flags: --all  --delay 0.25  --out-dir <path>.  (--min-ascents is inclusive: 10 → >=10.)
 
-# 2. Upload the staged JSON to Supabase (idempotent upsert on source_catalog_id).
-#    Needs the SERVICE-ROLE key (bypasses RLS) — never ship it in a client.
+# 1b. (Optional) instead of re-fetching, ADD `method` to existing snapshots by uuid without
+#     reshaping them: python3 scripts/enrich_catalog_methods.py
+
+# 2. BACK UP the current table first — the import upserts in place with no row history.
 SUPABASE_URL=https://<ref>.supabase.co SUPABASE_SERVICE_ROLE_KEY=<service-role-key> \
+  python3 scripts/backup_catalog_problems.py                # -> catalog_problems_backup_<ts>.json
+
+# 3. Upload the staged JSON to Supabase (idempotent upsert on source_catalog_id).
+#    Needs the SERVICE-ROLE key (bypasses RLS) — never ship it in a client.
+SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… \
   python3 scripts/import_catalog.py --all                   # or --layout 5 --angle 40
 
-# 3. Derive hold-set membership (needs Pillow: pip install Pillow)
+# 3b. Reconcile: soft-delete rows no longer in staging (the upsert never removes any).
+#     Dry-run first, then --apply.
+SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… \
+  python3 scripts/prune_catalog_orphans.py --all            # add --apply to write
+
+# 4. Derive hold-set membership (needs Pillow: pip install Pillow)
 python3 scripts/derive_holdset_membership.py                # scans its BOARDS list → *HoldSets.json (bundled)
 
-# 4. (New board only) import board art
+# 5. (New board only) import board art
 python3 scripts/import_board_images.py [--src /path/to/boardsesh]
 
-# 5. Register the board in Swift: add to Board.all in MoonBoardLED/Board/Board.swift
+# 6. Register the board in Swift: add to Board.all in MoonBoardLED/Board/Board.swift
 #    (and a MoonBoardSetup in MoonBoardSetup.swift if geometry differs). Clients then sync the
 #    board's slab from Supabase the first time it's added/opened — no rebuild needed to ship data.
 ```
@@ -141,6 +156,17 @@ decide which grid positions a set owns; that's why it needs the imported board a
   `--min-ascents N` are passed, `fetch_boardsesh.py` **unions** the two result sets (deduped by
   uuid) because the benchmark flag misses popular problems. (See the recent commit history around
   benchmark overrides.)
+- **Foot-rule `method` comes from boardsesh `characteristics`.** The fetch scripts map
+  `method_no_kickboard` / `method_footless` / `method_footless_kickboard` → `"No kickboard"` /
+  `"Footless"` / `"Footless + kickboard"` (else `null`). To add `method` to snapshots that were
+  fetched before this without re-fetching (which would reshape the curated slabs), run
+  `scripts/enrich_catalog_methods.py` — it pages boardsesh and adds `method` to existing problems
+  **by uuid** (additive, idempotent), then re-import with `import_catalog.py`. The web/iOS filter
+  offers a **fixed** label list (not slab-derived), so it shows regardless of the loaded data.
+- **Mini 2025 (layout 7) spans setIds `28,29,30,31` on boardsesh, not just `28`.** boardsesh
+  re-partitioned it; `setIds="28"` alone now returns only a ~181-problem slice of the full ~4,870.
+  Both fetch scripts use the full `28,29,30,31`. If a board's live count ever collapses, probe
+  adjacent setIds before assuming data was deleted.
 - API returns may hit `429/502/503`; the fetch scripts have retry/`--delay` handling.
 - Hold-id ↔ (col,row) conversion inside the scripts: `holdId = (row-1)*11 + col + 1`; reverse is
   `col = (holdId-1) % 11`, `row = (holdId-1)//11 + 1`.

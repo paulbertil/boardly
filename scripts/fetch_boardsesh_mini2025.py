@@ -14,7 +14,7 @@ problems from there.
 
   Endpoint:  https://ws.boardsesh.com/graphql   (public, no auth for reads)
   Query:     searchClimbs(input: ClimbSearchInput!)
-  Mini 2025: boardName="moonboard", layoutId=7, sizeId=1, setIds="28", angle=40
+  Mini 2025: boardName="moonboard", layoutId=7, sizeId=1, setIds="28,29,30,31", angle=40
 
 HOLD ENCODING
 -------------
@@ -36,7 +36,9 @@ import sys
 from urllib.request import Request, urlopen
 
 ENDPOINT = "https://ws.boardsesh.com/graphql"
-PARAMS = {"boardName": "moonboard", "layoutId": 7, "sizeId": 1, "setIds": "28", "angle": 40}
+# Mini 2025 is split across setIds 28,29,30,31 on boardsesh — "28" alone now returns
+# only a ~181-problem slice of the full ~4,870.
+PARAMS = {"boardName": "moonboard", "layoutId": 7, "sizeId": 1, "setIds": "28,29,30,31", "angle": 40}
 PAGE_SIZE = 100
 
 # boardsesh difficulty label ("6a+/V3") -> MoonBoard Font grade ("6A+").
