@@ -94,12 +94,15 @@ export function HoldFilterPicker({ board, open, onOpenChange, value, onChange }:
           </div>
 
           <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden px-3">
+            {/* Height-driven so the whole board (all rows) stays visible; width
+                follows the aspect ratio and is clamped to the container. The tap
+                targets are children of CatalogBoard, so they share its exact
+                rendered box and stay aligned on any board aspect ratio. */}
             <div
-              className="relative h-full max-w-full"
-              style={{ aspectRatio: `${g.width} / ${g.height}`, width: 'auto' }}
+              className="flex h-full max-w-full items-center justify-center"
+              style={{ aspectRatio: `${g.width} / ${g.height}` }}
             >
-              <CatalogBoard board={board} holds={[]} visibleHoldSetIds={visible} />
-              <div className="absolute inset-0">
+              <CatalogBoard board={board} holds={[]} visibleHoldSetIds={visible}>
                 {positions.map(({ col, row, x, y }) => {
                   const isSelected = selected.has(`${col}-${row}`)
                   return (
@@ -124,7 +127,7 @@ export function HoldFilterPicker({ board, open, onOpenChange, value, onChange }:
                     />
                   )
                 })}
-              </div>
+              </CatalogBoard>
             </div>
           </div>
 

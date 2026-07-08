@@ -3,7 +3,7 @@
 // geometry. Ported from ios/MoonBoardLED/Board/BoardImageView.swift. This is
 // non-interactive by design (R13) — it takes no tap handler.
 
-import type { CSSProperties, SyntheticEvent } from 'react'
+import type { CSSProperties, ReactNode, SyntheticEvent } from 'react'
 import type { CatalogHold } from '../catalog/catalogSync'
 import { displayed, holdColor } from '../types'
 import type { CatalogBoardDef } from './boards'
@@ -19,6 +19,11 @@ interface CatalogBoardProps {
   /** "col-row" positions from the active holds filter to ring in yellow. Only
       positions the problem actually uses are ringed, so no stray rings appear. */
   highlightHolds?: Set<string>
+  /** Overlay rendered inside the board's own position:relative, aspect-ratio-sized
+      box. Interactive children position themselves (e.g. `absolute inset-0`), so
+      targets placed with the render geometry share the exact art box and stay
+      aligned regardless of how the parent sizes the board. */
+  children?: ReactNode
 }
 
 /** Marker diameter as a fraction of one column's span on the board art.
@@ -64,6 +69,7 @@ export function CatalogBoard({
   visibleHoldSetIds,
   showBeta = false,
   highlightHolds,
+  children,
 }: CatalogBoardProps) {
   const g = board.geometry
   const overlays = board.holdSets.filter(
@@ -155,6 +161,10 @@ export function CatalogBoard({
           />
         )
       })}
+      {/* Interactive overlay (e.g. the holds-filter tap targets). Absolutely
+          positioned children share this box, so geometry-based coordinates land
+          on the drawn holds no matter how the parent sizes the board. */}
+      {children}
     </div>
   )
 }
