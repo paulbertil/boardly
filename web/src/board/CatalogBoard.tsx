@@ -19,9 +19,10 @@ interface CatalogBoardProps {
   /** "col-row" positions from the active holds filter to ring in yellow. Only
       positions the problem actually uses are ringed, so no stray rings appear. */
   highlightHolds?: Set<string>
-  /** Overlay rendered inside the board's own sized box (absolute inset-0), so any
-      interactive targets positioned with the render geometry share the exact art
-      box and stay aligned regardless of how the parent sizes the board. */
+  /** Overlay rendered inside the board's own position:relative, aspect-ratio-sized
+      box. Interactive children position themselves (e.g. `absolute inset-0`), so
+      targets placed with the render geometry share the exact art box and stay
+      aligned regardless of how the parent sizes the board. */
   children?: ReactNode
 }
 
