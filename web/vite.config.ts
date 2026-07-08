@@ -26,8 +26,8 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/assets\//],
       },
       manifest: {
-        name: 'Boardly',
-        short_name: 'Boardly',
+        name: 'Boardhang',
+        short_name: 'Boardhang',
         description:
           'Build a problem on the grid and light it on your DIY MoonBoard LEDs over Web Bluetooth.',
         theme_color: '#111111',

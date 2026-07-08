@@ -1,4 +1,4 @@
-# Boardly — PWA
+# Boardhang — PWA
 
 A Vite + React + TypeScript PWA that connects to a DIY MoonBoard LED controller
 over **Web Bluetooth**, lets you build a problem on a tappable 11×12 grid, and

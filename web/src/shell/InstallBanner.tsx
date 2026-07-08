@@ -50,10 +50,10 @@ export function InstallBanner() {
   }
 
   return (
-    <Card role="region" aria-label="Install Boardly" className="shrink-0 border-primary/30">
+    <Card role="region" aria-label="Install Boardhang" className="shrink-0 border-primary/30">
       <CardContent className="flex items-center gap-3 text-sm">
         <div className="min-w-0 flex-1 space-y-1">
-          <p className="font-medium">Install Boardly</p>
+          <p className="font-medium">Install Boardhang</p>
           <p className="text-muted-foreground">
             Add it to your device — a full-screen app that still connects to your board.
           </p>

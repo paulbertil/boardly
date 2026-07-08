@@ -70,7 +70,7 @@ sync feature (branch `feat/cloud-logbook-sync`); it's harmless to apply earlier.
 
 **Authentication → URL Configuration:**
 
-- Add to **Redirect URLs**: `com.boardly://auth-callback`
+- Add to **Redirect URLs**: `com.boardhang://auth-callback`
   (this is the app's custom scheme; it must match exactly — see step 8).
 
 **Authentication → (Sign In / Providers settings):**
@@ -116,10 +116,10 @@ sync feature (branch `feat/cloud-logbook-sync`); it's harmless to apply earlier.
 So magic-link / OAuth redirects return to the app.
 
 - **MoonBoardLED target → Info** tab → **URL Types** → **+**:
-  - **Identifier:** `com.boardly` (any unique string)
-  - **URL Schemes:** `com.boardly`
+  - **Identifier:** `com.boardhang` (any unique string)
+  - **URL Schemes:** `com.boardhang`
 - This must match `SupabaseConfig.redirectURL`
-  (`com.boardly://auth-callback`) and the redirect URL you allow-listed in
+  (`com.boardhang://auth-callback`) and the redirect URL you allow-listed in
   step 5.
 
 ## 9. Build & verify

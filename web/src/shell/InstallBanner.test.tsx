@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { InstallBanner } from './InstallBanner'
 import { INSTALL_DISMISSED_KEY } from '@/lib/pwa'
 
-const region = { name: 'Install Boardly' }
+const region = { name: 'Install Boardhang' }
 
 // jsdom lacks matchMedia; isStandalone() reads it. Default to a non-standalone stub.
 function stubMatchMedia(standalone = false) {
