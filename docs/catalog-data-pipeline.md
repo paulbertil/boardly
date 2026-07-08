@@ -10,7 +10,9 @@ in sync instead of drifting on divergent bundles. See migration `supabase/migrat
 
 **Key files:** `scripts/fetch_boardsesh*.py` (fetch) + `scripts/enrich_catalog_methods.py`
 (backfill the `method` field onto existing staging JSON without re-fetching) +
-`scripts/import_catalog.py` (upload to Supabase), `MoonBoardLED/Catalog/Catalog.swift` (synced disk cache + loading),
+`scripts/import_catalog.py` (upload to Supabase) + `scripts/{backup,restore}_catalog_problems.py`
+(dump / roll back the table) + `scripts/prune_catalog_orphans.py` (soft-delete removed rows),
+`MoonBoardLED/Catalog/Catalog.swift` (synced disk cache + loading),
 `MoonBoardLED/Services/Supabase/CatalogSyncManager.swift` (iOS pull),
 `web/src/catalog/catalogSync.ts` (PWA pull), `MoonBoardLED/Board/HoldSetMembership.swift`.
 
@@ -124,9 +126,16 @@ SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… \
   python3 scripts/import_catalog.py --all                   # or --layout 5 --angle 40
 
 # 3b. Reconcile: soft-delete rows no longer in staging (the upsert never removes any).
-#     Dry-run first, then --apply.
+#     Dry-run by default; --apply writes. Guards refuse to tombstone a slab whose staged
+#     set is empty or whose orphan share exceeds --max-orphan-fraction (0.20) — override
+#     with --force once you've confirmed the dry-run counts look right.
 SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… \
   python3 scripts/prune_catalog_orphans.py --all            # add --apply to write
+
+# Rollback (if an import/prune went wrong): restore the pre-import backup verbatim,
+# including `deleted` (un-tombstones a bad prune).
+SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… \
+  python3 scripts/restore_catalog_problems.py catalog_problems_backup_<ts>.json
 
 # 4. Derive hold-set membership (needs Pillow: pip install Pillow)
 python3 scripts/derive_holdset_membership.py                # scans its BOARDS list → *HoldSets.json (bundled)

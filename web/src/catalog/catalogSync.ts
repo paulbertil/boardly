@@ -42,8 +42,10 @@ const STORE = 'problems'
 const DB_VERSION = 1
 const EPOCH = '1970-01-01T00:00:00+00:00'
 // PostgREST caps a response at ~1000 rows, so a slab larger than that (the full
-// boards now run to ~20k) must be pulled page-by-page or the sync silently stops
-// after the first page. Page strictly BELOW that cap.
+// boards run to ~20k) must be pulled page-by-page. We terminate on an EMPTY page and
+// advance by the rows actually returned (not by a fixed PAGE_SIZE stride), so even a
+// server whose cap is BELOW PAGE_SIZE still syncs the whole slab instead of stopping
+// after one short page — the original single-page truncation bug.
 const PAGE_SIZE = 1000
 
 function cursorKey(layoutId: number, angle: number): string {
@@ -74,6 +76,47 @@ export interface SyncResult {
 }
 
 /**
+ * Page the full catalog delta for one slab (rows with `updated_at >= cursor`) from
+ * Supabase. Exported so the pagination can be unit-tested without IndexedDB.
+ *
+ * Two correctness properties the naive single-`.select()` lacked:
+ * - Terminates on an EMPTY page and advances by the rows actually returned, so a
+ *   `max-rows` cap below PAGE_SIZE can't be misread as the last page (silent truncation).
+ * - Uses `>= cursor`, not `>`: a strict `>` permanently skips a row whose `updated_at`
+ *   exactly equals the stored cursor — realistic because a batch upsert stamps every row
+ *   in the transaction with the same `updated_at`, so a client that syncs mid-import and
+ *   parks its cursor on that value would never see the rest of that batch. Re-pulling the
+ *   boundary rows is a no-op on apply (`store.put` is keyed by PK, idempotent).
+ * Ordered by (updated_at, source_catalog_id) so `range()` windows are deterministic even
+ * across equal `updated_at` values.
+ */
+export async function fetchCatalogDeltas(
+  client: NonNullable<typeof supabase>,
+  layoutId: number,
+  angle: number,
+  cursor: string,
+): Promise<CatalogRow[]> {
+  const rows: CatalogRow[] = []
+  for (let from = 0; ; ) {
+    const { data, error } = await client
+      .from('catalog_problems')
+      .select('*')
+      .eq('layout_id', layoutId)
+      .eq('angle', angle)
+      .gte('updated_at', cursor)
+      .order('updated_at', { ascending: true })
+      .order('source_catalog_id', { ascending: true })
+      .range(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    const page = (data ?? []) as CatalogRow[]
+    rows.push(...page)
+    if (page.length === 0) break
+    from += page.length
+  }
+  return rows
+}
+
+/**
  * Pull catalog deltas for one board+angle slab from Supabase, merge them into IndexedDB,
  * and advance the high-water-mark cursor. Lazy per board — call it when a board is
  * selected. Best-effort: on an offline / transient failure it leaves the cursor untouched
@@ -87,27 +130,9 @@ export async function syncSlab(layoutId: number, angle: number): Promise<SyncRes
     // High-water-mark delta pull: rows changed since our cursor, oldest-first so the
     // cursor advances monotonically. When Supabase is unconfigured we degrade to "no
     // data" (the app still runs) rather than failing — same as the old anon REST path.
-    let rows: CatalogRow[] = []
-    if (supabase) {
-      // Page through the whole delta in one sync. Order by (updated_at, id) so paging is
-      // deterministic even when many rows share an updated_at (a batch import stamps them
-      // near-identically); range() walks fixed windows until a short page ends it.
-      for (let from = 0; ; from += PAGE_SIZE) {
-        const { data, error } = await supabase
-          .from('catalog_problems')
-          .select('*')
-          .eq('layout_id', layoutId)
-          .eq('angle', angle)
-          .gt('updated_at', cursor)
-          .order('updated_at', { ascending: true })
-          .order('source_catalog_id', { ascending: true })
-          .range(from, from + PAGE_SIZE - 1)
-        if (error) throw error
-        const page = (data ?? []) as CatalogRow[]
-        rows.push(...page)
-        if (page.length < PAGE_SIZE) break
-      }
-    }
+    const rows: CatalogRow[] = supabase
+      ? await fetchCatalogDeltas(supabase, layoutId, angle, cursor)
+      : []
     if (rows.length > 0) {
       const db = await openDB()
       const tx = db.transaction(STORE, 'readwrite')

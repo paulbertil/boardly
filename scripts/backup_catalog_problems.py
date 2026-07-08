@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
 """
 Dump the current `public.catalog_problems` table to a local JSON file — a rollback
-point to take BEFORE re-importing the catalog (import_catalog.py). If an import goes
-wrong, restore by feeding this file back through import_catalog.py (it upserts on the
-same primary key), or by re-inserting rows directly.
+point to take BEFORE re-importing the catalog (import_catalog.py).
 
-The dump preserves EVERY column (incl. updated_at and deleted), so a restore is exact.
+The dump preserves EVERY column (incl. updated_at and deleted), so it is a faithful
+snapshot. Restore it with restore_catalog_problems.py (it upserts the rows verbatim,
+including `deleted`, so it also UN-tombstones a bad prune). Do NOT feed this file to
+import_catalog.py — that reads the `{setup, layoutId, angle, problems[]}` staging shape,
+not this `{table, count, rows[]}` dump, and never touches `deleted`.
 
     fetch_boardsesh.py -> catalog-data/*.json -> [BACKUP] -> import_catalog.py -> Supabase
-                                                                                     |
-                                                                          [BACKUP again to roll forward]
+                                                     |                               |
+                                          restore_catalog_problems.py  <----  (rollback)
+
+Assumes no concurrent writers during the dump (offset paging over a stable PK order can
+skip a row if one is inserted mid-dump). Backups are taken right before a manual import,
+so this holds in practice.
 
 Environment
 -----------
@@ -51,30 +57,32 @@ def main():
     out_path = sys.argv[1] if len(sys.argv) > 1 else (
         "catalog_problems_backup_" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + ".json")
 
-    # Order by the PK so paging is stable; ask PostgREST for the total via Range.
+    # Order by the PK so paging is stable. Terminate on the Content-Range total, advancing
+    # by rows actually returned — so a server capping responses below PAGE neither under-reads
+    # (short page misread as the last) nor over-reads past the end (416 on an out-of-range offset).
     base = f"{base_url}/rest/v1/catalog_problems?select=*&order=source_catalog_id.asc"
-    rows, offset = [], 0
-    while True:
+    rows, offset, total = [], 0, None
+    while total is None or offset < total:
         headers = {
             "apikey": key, "Authorization": f"Bearer {key}",
             "Range-Unit": "items", "Range": f"{offset}-{offset + PAGE - 1}",
         }
         batch, content_range = _get(base, headers)
         rows.extend(batch)
-        total = None
         if content_range and "/" in content_range:
-            tail = content_range.split("/")[-1]
-            total = int(tail) if tail.isdigit() else None
+            tail = content_range.rsplit("/", 1)[-1]
+            if tail.isdigit():
+                total = int(tail)
         print(f"  fetched {len(rows)}" + (f"/{total}" if total else ""))
-        if len(batch) < PAGE:
+        if not batch:
             break
-        offset += PAGE
+        offset += len(batch)
 
     with open(out_path, "w") as f:
         json.dump({"table": "catalog_problems", "count": len(rows),
                    "dumped_at": datetime.now(timezone.utc).isoformat(), "rows": rows}, f, ensure_ascii=False)
     print(f"\nBacked up {len(rows)} rows -> {os.path.abspath(out_path)}")
-    print("Restore (if needed): re-run import_catalog.py against staging, or re-upsert these rows.")
+    print("Restore (if needed): python3 scripts/restore_catalog_problems.py " + os.path.basename(out_path))
 
 
 if __name__ == "__main__":

@@ -31,8 +31,9 @@ Examples
   # one board / angle (matches a single catalog-data file's header):
   python3 scripts/import_catalog.py --layout 7 --angle 40
 
-Note: this v1 does NOT tombstone removed problems (never sets deleted=true). Curated
-removals are out of scope; add a reconcile pass later if the source set ever shrinks.
+Note: this upsert only adds/updates — it never tombstones problems that dropped out of
+the source set. Reconcile removals separately with prune_catalog_orphans.py (soft-delete),
+and roll a bad import back with backup_catalog_problems.py / restore_catalog_problems.py.
 """
 
 import argparse

@@ -29,10 +29,11 @@ export const STATUS_LABELS: Record<StatusKey, string> = {
 }
 
 /**
- * The MoonBoard foot-rule "method" labels, as a FIXED list matching iOS
- * (CatalogListView's methodChoices). A problem's `method` is one of these or null.
- * The filter shows all of them regardless of which appear in the loaded slab — iOS
- * parity, and so the option is discoverable before any method-tagged problem loads.
+ * The MoonBoard foot-rule "method" labels, as a FIXED list — the foot-rule subset of
+ * iOS's CatalogListView.methodChoices (which additionally carries an "Any marked holds"
+ * sentinel that is NOT a `method` value and so has no place here). A problem's `method`
+ * is one of these or null. The filter shows all of them regardless of which appear in the
+ * loaded slab, so the option is discoverable before any method-tagged problem loads.
  */
 export const METHOD_LABELS: readonly string[] = ['No kickboard', 'Footless', 'Footless + kickboard']
 
