@@ -32,6 +32,15 @@ describe('ShareSession', () => {
     expect(await screen.findByText('Copied')).toBeInTheDocument()
   })
 
+  it('copies the link from the truncated chip and shows feedback', async () => {
+    h.getInviteToken.mockResolvedValue('tok-chip')
+    render(<ShareSession />)
+    await screen.findByRole('img', { name: 'Session join QR code' })
+    fireEvent.click(screen.getByRole('button', { name: 'Copy join link' }))
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(expect.stringContaining('/session/join/tok-chip'))
+    expect(await screen.findByText('Copied')).toBeInTheDocument()
+  })
+
   it('shows an error + retry when the token fetch fails, then recovers', async () => {
     h.getInviteToken.mockRejectedValueOnce(new Error('nope')).mockResolvedValueOnce('tok-xyz')
     render(<ShareSession />)

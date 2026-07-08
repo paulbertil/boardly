@@ -10,6 +10,7 @@ import { Check, Copy, RotateCw } from 'lucide-react'
 import { getInviteToken } from './sessionsStore'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 function buildJoinUrl(token: string): string {
   return `${window.location.origin}/session/join/${token}`
@@ -69,6 +70,21 @@ export function ShareSession() {
   const url = token ? buildJoinUrl(token) : ''
   const canNativeShare = typeof navigator !== 'undefined' && 'share' in navigator
 
+  const flashCopied = useCallback(() => {
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }, [])
+
+  const copyLink = useCallback(async () => {
+    if (!url) return
+    try {
+      await navigator.clipboard.writeText(url)
+      flashCopied()
+    } catch {
+      // clipboard blocked — the tooltip still exposes the full link for manual copy
+    }
+  }, [url, flashCopied])
+
   const share = useCallback(async () => {
     if (!url) return
     // Prefer the native share sheet; fall back to clipboard with a visible confirmation,
@@ -83,12 +99,11 @@ export function ShareSession() {
     }
     try {
       await navigator.clipboard.writeText(url)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      flashCopied()
     } catch {
-      // clipboard blocked — the link text is visible below for manual copy
+      // clipboard blocked — the link chip's tooltip still exposes the full link
     }
-  }, [url, canNativeShare])
+  }, [url, canNativeShare, flashCopied])
 
   if (status === 'loading') {
     return (
@@ -112,9 +127,33 @@ export function ShareSession() {
   }
 
   return (
-    <div className="flex flex-col items-center gap-4">
+    <div className="flex w-full flex-col items-center gap-4">
       <QrImage url={url} />
-      <p className="max-w-full truncate text-xs text-muted-foreground">{url}</p>
+
+      {/* Truncated link chip: hover for the full URL, click to copy (with feedback). */}
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                onClick={() => void copyLink()}
+                aria-label="Copy join link"
+                className="flex min-w-0 max-w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              />
+            }
+          >
+            <span className="min-w-0 truncate">{url}</span>
+            {copied ? (
+              <Check className="size-3.5 shrink-0 text-primary" />
+            ) : (
+              <Copy className="size-3.5 shrink-0" />
+            )}
+          </TooltipTrigger>
+          <TooltipContent>{copied ? 'Copied!' : url}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+
       <Button onClick={() => void share()} className="w-full max-w-xs">
         {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
         {copied ? 'Copied' : canNativeShare ? 'Share link' : 'Copy link'}
