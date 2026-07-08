@@ -91,6 +91,22 @@ describe('UploadPanel — uploader', () => {
     await waitFor(() => expect(listMyImports).toHaveBeenCalledTimes(2))
   })
 
+  it('disables upload and warns when at the file cap', async () => {
+    const atCap = Array.from({ length: 2 }, (_, i) => ({
+      id: `r${i}`,
+      original_filename: `f${i}.csv`,
+      created_at: '2026-07-01T00:00:00Z',
+    }))
+    listMyImports.mockResolvedValue(atCap as never)
+    render(<UploadPanel />)
+    await screen.findByText('f0.csv')
+
+    pick(fakeFile('moon.csv'))
+    fireEvent.click(screen.getByRole('checkbox'))
+    expect(screen.getByRole('button', { name: /upload file/i })).toBeDisabled()
+    expect(screen.getByText(/reached the 2-file limit/i)).toBeInTheDocument()
+  })
+
   it('shows an error when the upload fails', async () => {
     uploadImport.mockRejectedValue(new Error('storage boom'))
     render(<UploadPanel />)

@@ -14,6 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   ALLOWED_EXTENSIONS,
+  MAX_UPLOADS,
   listMyImports,
   removeImport,
   uploadImport,
@@ -113,7 +114,8 @@ function Uploader() {
     }
   }
 
-  const canUpload = file !== null && consent && !busy
+  const atCap = imports.length >= MAX_UPLOADS
+  const canUpload = file !== null && consent && !busy && !atCap
 
   return (
     <div className="space-y-4">
@@ -148,6 +150,12 @@ function Uploader() {
           <Button onClick={() => void onUpload()} disabled={!canUpload}>
             {busy ? 'Uploading…' : 'Upload file'}
           </Button>
+
+          {atCap && (
+            <p className="text-sm text-muted-foreground">
+              You’ve reached the {MAX_UPLOADS}-file limit. Remove one below to upload more.
+            </p>
+          )}
 
           {error && (
             <p className="text-sm text-destructive" role="alert">

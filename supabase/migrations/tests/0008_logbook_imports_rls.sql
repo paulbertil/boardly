@@ -83,6 +83,31 @@ begin
     raise notice 'PASS: cross-user delete affects zero rows';
 end $$;
 
+-- ── Per-user object cap: the 2-file limit is enforced on storage.objects ──────
+-- Act as a fresh user C so A''s single object doesn''t skew the count.
+reset role;
+insert into auth.users (id) values ('33333333-3333-3333-3333-333333333333');
+set role authenticated;
+select set_config('test.uid', '33333333-3333-3333-3333-333333333333', false);
+do $$
+declare i int;
+begin
+    -- Fill to the cap (2 objects), then the 3rd must be rejected.
+    for i in 1..2 loop
+        insert into storage.objects (bucket_id, name, owner)
+        values ('logbook-imports', '33333333-3333-3333-3333-333333333333/f' || i || '.csv',
+                '33333333-3333-3333-3333-333333333333');
+    end loop;
+    begin
+        insert into storage.objects (bucket_id, name, owner)
+        values ('logbook-imports', '33333333-3333-3333-3333-333333333333/overflow.csv',
+                '33333333-3333-3333-3333-333333333333');
+        raise exception 'FAIL: 3rd object allowed past the per-user cap';
+    exception when insufficient_privilege then
+        raise notice 'PASS: per-user object cap (2) enforced';
+    end;
+end $$;
+
 -- ── Anonymous role is default-denied (has grants, but no policy) ──────────────
 reset role;
 set role anon;

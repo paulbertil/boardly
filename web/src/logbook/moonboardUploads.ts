@@ -10,6 +10,11 @@ import { supabase } from '../supabase/client'
 export const BUCKET = 'logbook-imports'
 export const MAX_BYTES = 25 * 1024 * 1024 // 25 MiB — matches the bucket's file_size_limit
 export const ALLOWED_EXTENSIONS = ['csv', 'json', 'zip', 'txt', 'xlsx'] as const
+/** Per-user upload cap. A GDPR export is realistically one file (maybe a CSV + a JSON),
+ *  and Remove handles mistakes, so 2 is plenty — and it bounds abuse to 50 MB/user. The
+ *  real enforcement is the storage.objects INSERT policy in 0008; this mirrors it so the
+ *  UI can warn instead of surfacing a raw RLS error. */
+export const MAX_UPLOADS = 2
 
 /** The envelope row (mirrors public.logbook_imports — no MoonBoard content). */
 export interface LogbookImport {
