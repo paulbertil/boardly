@@ -31,10 +31,23 @@ format/uniqueness constraint, and the `delete_user()` account-deletion RPC.
 sweeps them on account deletion. Apply this once the app build includes the logbook
 sync feature (branch `feat/cloud-logbook-sync`); it's harmless to apply earlier.
 
+**`0007_collaboration_sessions.sql`** — collaboration sessions (cross-member
+ascent-status filtering): creates the `sessions` and `session_members` tables, the
+`is_session_member()` membership helper, the owner-seat trigger, membership-gated RLS
+(no member-facing INSERT — joins go through the RPC), and the four RPCs
+(`join_session_by_token`, `session_member_ascents`, `session_invite_token`,
+`touch_session`). Cross-member reads go through the status-only `session_member_ascents`
+projection; `ascents` RLS (0002) is left owner-only. Needs no `delete_user()` change —
+both tables cascade off `auth.users`. **This is a cross-user data path: apply and verify
+it in the target project _before_ deploying the client build that calls its RPCs**
+(branch `feat/web-collab-sessions`).
+
 - **Easiest:** open **SQL Editor** in the dashboard, paste the entire contents of
   [`supabase/migrations/0001_profiles.sql`](../supabase/migrations/0001_profiles.sql)
   and **Run**, then do the same with
-  [`supabase/migrations/0002_logbook_sync.sql`](../supabase/migrations/0002_logbook_sync.sql).
+  [`supabase/migrations/0002_logbook_sync.sql`](../supabase/migrations/0002_logbook_sync.sql)
+  and
+  [`supabase/migrations/0007_collaboration_sessions.sql`](../supabase/migrations/0007_collaboration_sessions.sql).
 - **Or with the CLI:** `supabase link --project-ref <ref>` then `supabase db push`
   (applies every migration in `supabase/migrations/` in order).
 

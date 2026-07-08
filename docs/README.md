@@ -21,6 +21,7 @@ editing code in that area. Each doc is scoped to one subsystem.
 | Fetching/regenerating catalog data, JSON schemas, the Python scripts | [catalog-data-pipeline.md](catalog-data-pipeline.md) |
 | SwiftData models, logging ascents/tries, the logbook & pyramid | [data-model-and-logging.md](data-model-and-logging.md) |
 | Tabs, navigation, Home board management, catalog filters, Settings | [navigation-and-ui-flows.md](navigation-and-ui-flows.md) |
+| Collaboration sessions, cross-member status filtering, the status-only projection RPC (web) | [collaboration-sessions.md](collaboration-sessions.md) |
 
 ## Conventions used across these docs
 

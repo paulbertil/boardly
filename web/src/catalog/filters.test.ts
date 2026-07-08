@@ -8,6 +8,7 @@ import {
   resetFilters,
   type FilterContext,
   type FilterState,
+  type SessionStatusContext,
 } from './filters'
 
 function p(over: Partial<CatalogProblem> & { source_catalog_id: string }): CatalogProblem {
@@ -221,5 +222,78 @@ describe('reset + active', () => {
     expect(hasActiveFilters(r)).toBe(false)
     expect(r.sortPrimary).toBe('rated')
     expect(r.sortSecondary).toBe('easiest')
+  })
+})
+
+// ── U4: per-member session status (OR-within-row, AND-across-rows, empty-row = ignore) ──
+describe('applyFilters — per-member session status (R4/R5)', () => {
+  // World: four problems; three members with distinct logbooks on this board.
+  //   me   : sent {S}, attempted {A}     (logged {S, A})
+  //   alice: sent {X}                     (logged {X})
+  //   bob  : zero ascents                 (logged {})  ← roster-seeded, empty Sets
+  const list = [p({ source_catalog_id: 'S' }), p({ source_catalog_id: 'A' }), p({ source_catalog_id: 'X' }), p({ source_catalog_id: 'N' })]
+  const pair = (sent: string[], logged: string[]) => ({ sentIds: new Set(sent), loggedIds: new Set(logged) })
+  const sets = {
+    me: pair(['S'], ['S', 'A']),
+    alice: pair(['X'], ['X']),
+    bob: pair([], []),
+  }
+  const sess = (over: Partial<SessionStatusContext> = {}): SessionStatusContext => ({
+    ready: true,
+    members: ['me', 'alice', 'bob'],
+    memberStatus: {},
+    sets,
+    ...over,
+  })
+  const withSession = (session: SessionStatusContext): FilterContext => mkCtx({ statusReady: true, session })
+
+  it('AND across rows: two members both "Not logged" → only problems both are unlogged on', () => {
+    const s = withSession(sess({ members: ['me', 'bob'], memberStatus: { me: ['unlogged'], bob: ['unlogged'] } }))
+    // me-unlogged = {X, N}; bob-unlogged = all → AND → {X, N}.
+    expect(ids(applyFilters(list, state(), s)).sort()).toEqual(['N', 'X'])
+  })
+
+  it('OR within a row: {Sent, Attempted} matches sent-or-attempted for that member', () => {
+    const s = withSession(sess({ members: ['me'], memberStatus: { me: ['sent', 'attempted'] } }))
+    expect(ids(applyFilters(list, state(), s)).sort()).toEqual(['A', 'S'])
+  })
+
+  it('an empty row is ignored — a third member does not change the result', () => {
+    const base = withSession(sess({ members: ['me', 'alice'], memberStatus: { me: ['unlogged'], alice: ['unlogged'] } }))
+    const withEmpty = withSession(
+      sess({ members: ['me', 'alice', 'bob'], memberStatus: { me: ['unlogged'], alice: ['unlogged'] } }), // bob empty
+    )
+    expect(ids(applyFilters(list, state(), withEmpty)).sort()).toEqual(ids(applyFilters(list, state(), base)).sort())
+  })
+
+  it('all rows empty → session clause is a no-op (full list)', () => {
+    const s = withSession(sess({ memberStatus: {} }))
+    expect(ids(applyFilters(list, state(), s))).toHaveLength(4)
+  })
+
+  it('asymmetric coach case: Alice Sent AND me Not logged', () => {
+    const s = withSession(sess({ members: ['me', 'alice'], memberStatus: { alice: ['sent'], me: ['unlogged'] } }))
+    // alice-sent = {X}; me-unlogged = {X, N} → AND → {X}.
+    expect(ids(applyFilters(list, state(), s))).toEqual(['X'])
+  })
+
+  it('self row (R5) participates identically to any other member row', () => {
+    const s = withSession(sess({ members: ['me'], memberStatus: { me: ['sent'] } }))
+    expect(ids(applyFilters(list, state(), s))).toEqual(['S'])
+  })
+
+  it('a roster-seeded zero-ascent member CONSTRAINS (not skipped): bob "Sent" → nothing matches', () => {
+    const s = withSession(sess({ members: ['me', 'bob'], memberStatus: { bob: ['sent'] } }))
+    expect(ids(applyFilters(list, state(), s))).toEqual([]) // bob has empty Sets → matches no sends
+  })
+
+  it('not-ready session skips the clause (list not blanked mid-load)', () => {
+    const s = withSession(sess({ ready: false, members: ['me', 'bob'], memberStatus: { me: ['sent'], bob: ['sent'] } }))
+    expect(ids(applyFilters(list, state(), s))).toHaveLength(4)
+  })
+
+  it('no active session → single-user statusFilters path is unchanged', () => {
+    const single = mkCtx({ statusReady: true, sentIds: new Set(['S']), loggedIds: new Set(['S', 'A']) })
+    expect(ids(applyFilters(list, state({ statusFilters: ['sent'] }), single))).toEqual(['S'])
   })
 })

@@ -7,6 +7,7 @@
 import { SlidersHorizontal } from 'lucide-react'
 import type { CatalogBoardDef } from '../board/boards'
 import { FilterControls } from './FilterControls'
+import { useSessionFilterRows } from './useSessionFilterRows'
 import { FabTrigger } from './FabTrigger'
 import { activeFilterCount, hasActiveFilters, resetFilters, type FilterState } from './filters'
 import { Button } from '@/components/ui/button'
@@ -33,7 +34,11 @@ export function FilterSheet({
   statusReady,
   signedOut,
 }: FilterSheetProps) {
-  const count = activeFilterCount(state, statusReady)
+  // In a session the single-user statusFilters dimension is inert (self is a member row),
+  // so count it only when solo; add 1 when any member row has a selection.
+  const session = useSessionFilterRows(board)
+  const sessionStatusActive = session?.rows.some((r) => r.selected.length > 0) ?? false
+  const count = activeFilterCount(state, session ? false : statusReady) + (sessionStatusActive ? 1 : 0)
   return (
     <Drawer showSwipeHandle>
       {/* Positioned by the parent's shared FAB column (CatalogScreen). */}

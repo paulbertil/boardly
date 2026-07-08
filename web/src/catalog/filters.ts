@@ -99,6 +99,31 @@ export function resetFilters(s: FilterState): FilterState {
   }
 }
 
+/** Per-member Set-pair (one member's sent/logged sets on this board). */
+export interface MemberSetPair {
+  sentIds: Set<string>
+  loggedIds: Set<string>
+}
+
+/**
+ * Collaboration-session status context (U4). When present it REPLACES the single-user
+ * status clause: the self member row IS member row #1 (R5), so `statusFilters` is ignored
+ * while a session is active. Semantics: OR within a member's row, AND across member rows,
+ * an empty row = ignore. Gated on `ready` (U3's single atomic flag — roster known AND
+ * projection fetched); until ready the whole clause is skipped so the list is never
+ * silently wrong mid-load.
+ */
+export interface SessionStatusContext {
+  /** Roster known AND projection fetched (U3). */
+  ready: boolean
+  /** The server-consistent membership snapshot (the set of member rows to intersect). */
+  members: string[]
+  /** Per-member chip selections (empty / absent row = that member does not participate). */
+  memberStatus: Record<string, StatusKey[]>
+  /** Per-member Set-pairs (roster-seeded — a zero-ascent member has empty Sets, not absent). */
+  sets: Record<string, MemberSetPair>
+}
+
 export interface FilterContext {
   favoriteIds: Set<string>
   /** Installed-hold-set filter (U5). Returns true when the problem is climbable. */
@@ -111,7 +136,12 @@ export interface FilterContext {
    *  False (signed-out, or the signed-in ascents-loading window) skips status
    *  entirely so a `?status=` deep-link never blanks the list before data lands. */
   statusReady: boolean
+  /** Active collaboration session (U4). When set, per-member status filtering replaces the
+   *  single-user `statusFilters` path; when absent, the single-user path runs unchanged. */
+  session?: SessionStatusContext
 }
+
+const EMPTY_PAIR: MemberSetPair = { sentIds: new Set(), loggedIds: new Set() }
 
 /** Whether a problem matches the OR of the selected status states. sent wins over
  *  attempted: a problem with any send is "sent", never "attempted". */
@@ -123,6 +153,21 @@ function matchesStatus(id: string, keys: StatusKey[], sentIds: Set<string>, logg
         ? loggedIds.has(id) && !sentIds.has(id)
         : !loggedIds.has(id),
   )
+}
+
+/**
+ * The per-member session status predicate (R4): AND across every member's row, where each
+ * row is an OR over its selected states, and an empty (or absent) row is ignored. A member
+ * is always present in `sets` when roster-seeded (U3), so a zero-ascent member reads as
+ * unlogged-everywhere rather than being skipped. Self participates identically (R5).
+ */
+export function matchesSessionStatus(id: string, session: SessionStatusContext): boolean {
+  return session.members.every((m) => {
+    const keys = session.memberStatus[m] ?? []
+    if (keys.length === 0) return true // empty row → this member does not constrain
+    const pair = session.sets[m] ?? EMPTY_PAIR
+    return matchesStatus(id, keys, pair.sentIds, pair.loggedIds)
+  })
 }
 
 function compare(key: SortKey, a: CatalogProblem, b: CatalogProblem): number {
@@ -158,9 +203,13 @@ export function applyFilters(
     if (p.stars < s.minStars) return false
     if (s.methods.length > 0 && !(p.method && s.methods.includes(p.method))) return false
     if (s.favoritesOnly && !ctx.favoriteIds.has(p.source_catalog_id)) return false
-    // Status is gated on statusReady (signed in + ascents loaded); otherwise skipped
-    // so signed-out / still-loading never blanks a ?status= link.
-    if (ctx.statusReady && s.statusFilters.length > 0) {
+    // Status. With an active session the per-member clause replaces the single-user one
+    // (self is member row #1 — R5); it is gated on the session's atomic readiness so the
+    // list is never blanked mid-load. Without a session, the single-user path runs, itself
+    // gated on statusReady so signed-out / still-loading never blanks a ?status= link.
+    if (ctx.session) {
+      if (ctx.session.ready && !matchesSessionStatus(p.source_catalog_id, ctx.session)) return false
+    } else if (ctx.statusReady && s.statusFilters.length > 0) {
       if (!matchesStatus(p.source_catalog_id, s.statusFilters, ctx.sentIds, ctx.loggedIds)) return false
     }
     if (holdsNeeded.length > 0) {

@@ -15,6 +15,7 @@ import { getActiveHoldSetsRaw, getAngle, setAngle, useBoardStore } from '../boar
 import { holdSetContext, isClimbable } from '../board/holdSetMembership'
 import { CatalogList } from './CatalogList'
 import { FilterSheet } from './FilterSheet'
+import { SessionBar } from './SessionBar'
 import { RecentsSheet } from './RecentsSheet'
 import { ProblemDetail } from './ProblemDetail'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
@@ -27,6 +28,8 @@ import { useSlab } from './useSlab'
 import { useProblemDrawer } from './useProblemDrawer'
 import { useEnsureAscentsLoaded } from '../logbook/ascents'
 import { useAuth } from '../auth/AuthProvider'
+import { useSessions } from '../sessions/sessionsStore'
+import { useMemberAscents } from '../sessions/memberAscentsStore'
 import type { CatalogProblem } from './catalogSync'
 
 const routeApi = getRouteApi('/board/$layoutId/catalog')
@@ -91,6 +94,16 @@ export function CatalogScreen() {
     [ascents, board.layoutId],
   )
 
+  // ── Collaboration session (board-scoped) ─────────────────────────────────────
+  // A session targets one board; only apply it on its own board's catalog. When a session
+  // for a different board is active, this passes null so the projection clears here. This
+  // read feeds the list PREDICATE (FilterContext.session below); the Filters-sheet UI rows
+  // read the same stores directly via useSessionFilterRows (no prop drilling).
+  const { activeSession, memberStatus } = useSessions()
+  const sessionForBoard =
+    activeSession && activeSession.boardLayoutId === board.layoutId ? activeSession : null
+  const memberAsc = useMemberAscents(sessionForBoard?.id ?? null)
+
   const filters = useMemo(() => searchToFilters(search), [search])
 
   // Persist filter changes to the URL (source of truth) and write them through to the
@@ -122,8 +135,30 @@ export function CatalogScreen() {
       sentIds,
       loggedIds,
       statusReady,
+      // In a session the per-member clause replaces the single-user one (self = row #1);
+      // gated on the projection's atomic readiness so the list is never blanked mid-load.
+      session: sessionForBoard
+        ? {
+            ready: memberAsc.ready,
+            members: memberAsc.members,
+            memberStatus,
+            sets: memberAsc.bySets,
+          }
+        : undefined,
     }
-  }, [board, favoriteIds, activeHoldSetsRaw, sentIds, loggedIds, statusReady])
+  }, [
+    board,
+    favoriteIds,
+    activeHoldSetsRaw,
+    sentIds,
+    loggedIds,
+    statusReady,
+    sessionForBoard,
+    memberStatus,
+    memberAsc.ready,
+    memberAsc.members,
+    memberAsc.bySets,
+  ])
 
   const transform = useMemo(
     () => (list: CatalogProblem[]) => applyFilters(list, filters, context),
@@ -169,6 +204,7 @@ export function CatalogScreen() {
   return (
     <div className="flex flex-1 flex-col">
       {!added && <UnaddedBoardBanner name={board.name} onAdd={() => addBoard(board.layoutId)} />}
+      <SessionBar board={board} />
       <CatalogList
         board={board}
         angle={angle}
