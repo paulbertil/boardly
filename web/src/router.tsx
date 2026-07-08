@@ -8,6 +8,7 @@
 //   /                        → redirect: no boards → /boards, else last catalog
 //   /boards                  → MyBoards (global, not board-scoped)
 //   /logbook                 → LogbookScreen
+//   /logbook/import          → ImportFromMoonBoardScreen (guided GDPR data request)
 //   /lists                   → ListsScreen  (Saved Lists index; requires sign-in)
 //   /lists/$listId           → ListDetailScreen
 //   /settings                → SettingsScreen (global; appearance/theme)
@@ -30,6 +31,7 @@ import { AppLayout } from './shell/AppLayout'
 import { MyBoards } from './shell/MyBoards'
 import { SettingsScreen } from './shell/SettingsScreen'
 import { LogbookScreen } from './logbook/LogbookScreen'
+import { ImportFromMoonBoardScreen } from './logbook/ImportFromMoonBoardScreen'
 import { ListsScreen } from './lists/ListsScreen'
 import { ListDetailScreen } from './lists/ListDetailScreen'
 import { CatalogScreen } from './catalog/CatalogScreen'
@@ -39,6 +41,7 @@ import { getActiveBoardId, getAddedBoardIds } from './board/boardStore'
 import { catalogNavTarget } from './catalog/catalogNav'
 import { CATALOG_SEARCH_DEFAULTS, validateCatalogSearch } from './catalog/catalogSearch'
 import { LOGBOOK_SEARCH_DEFAULTS, validateLogbookSearch } from './logbook/logbookSearch'
+import { IMPORT_SEARCH_DEFAULTS, validateImportSearch } from './logbook/importSearch'
 
 function BoardsRoute() {
   const navigate = useNavigate()
@@ -89,6 +92,14 @@ function buildRouteTree() {
     component: LogbookScreen,
   })
 
+  const logbookImportRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/logbook/import',
+    validateSearch: validateImportSearch,
+    search: { middlewares: [stripSearchParams(IMPORT_SEARCH_DEFAULTS)] },
+    component: ImportFromMoonBoardScreen,
+  })
+
   const settingsRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/settings',
@@ -134,6 +145,7 @@ function buildRouteTree() {
     indexRoute,
     boardsRoute,
     logbookRoute,
+    logbookImportRoute,
     settingsRoute,
     listsRoute,
     listDetailRoute,

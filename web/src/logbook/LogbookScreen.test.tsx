@@ -97,6 +97,12 @@ vi.mock('@tanstack/react-router', () => ({
     useSearch: () => search,
     useNavigate: () => navigate,
   }),
+  // The import banner renders a <Link>; stub it as a plain anchor for jsdom.
+  Link: ({ to, children, ...props }: { to: string; children: ReactNode }) => (
+    <a href={to} {...props}>
+      {children}
+    </a>
+  ),
 }))
 
 afterEach(() => {
@@ -111,6 +117,7 @@ afterEach(() => {
   catalogMap = new Map()
   navigate.mockClear() // clear calls but keep the search-applying implementation
   back.mockReset()
+  localStorage.clear() // reset the import-banner dismissal between tests
 })
 
 describe('LogbookScreen — no board added', () => {
@@ -171,6 +178,73 @@ describe('LogbookScreen — no board added', () => {
 
     expect(screen.getByText('Sign in to see your logbook')).toBeInTheDocument()
     expect(screen.queryByText('Add a board to start your logbook')).toBeNull()
+  })
+})
+
+describe('LogbookScreen — import-from-MoonBoard affordance', () => {
+  const addedBoard = { layoutId: 7, name: 'Mini MoonBoard 2025' }
+
+  it('offers Import from MoonBoard in the empty logbook and routes to /logbook/import', () => {
+    boardState.addedBoards = [addedBoard]
+    ascentsState.ascents = []
+    render(<LogbookScreen />)
+
+    expect(screen.getByText('No logged ascents yet')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Import from MoonBoard' }))
+    expect(navigate).toHaveBeenCalledWith({ to: '/logbook/import' })
+  })
+
+  it('offers the import affordance when nothing is logged on the active board', () => {
+    boardState.addedBoards = [addedBoard]
+    // Ascents exist, but on a different board → the active board's list is empty.
+    ascentsState.ascents = [
+      { id: 'x', boardLayoutId: 1, sent: true, sourceCatalogId: null, date: '2026-07-01' },
+    ]
+    render(<LogbookScreen />)
+
+    expect(screen.getByText('No ascents on Mini MoonBoard 2025')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Import from MoonBoard' }))
+    expect(navigate).toHaveBeenCalledWith({ to: '/logbook/import' })
+  })
+
+  const populatedAscent = {
+    id: 'a1',
+    date: '2026-07-01',
+    boardLayoutId: 7,
+    problemName: 'CRIMP CITY',
+    problemGrade: '6A',
+    votedGrade: '6A',
+    tries: 1,
+    stars: 0,
+    comment: '',
+    sent: false,
+    sourceCatalogId: null,
+    userProblemId: null,
+  }
+
+  it('shows a dismissable import banner in the populated logbook, linking to /logbook/import', () => {
+    boardState.addedBoards = [addedBoard]
+    ascentsState.ascents = [populatedAscent]
+    render(<LogbookScreen />)
+
+    expect(screen.getByText('CRIMP CITY')).toBeInTheDocument()
+    const banner = screen.getByRole('region', { name: 'Import from MoonBoard' })
+    expect(banner).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Import' })).toHaveAttribute('href', '/logbook/import')
+  })
+
+  it('hides the import banner once dismissed and remembers it', () => {
+    boardState.addedBoards = [addedBoard]
+    ascentsState.ascents = [populatedAscent]
+    const first = render(<LogbookScreen />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss import banner' }))
+    expect(screen.queryByRole('region', { name: 'Import from MoonBoard' })).toBeNull()
+
+    // Dismissal persists (localStorage) — a fresh mount keeps the banner hidden.
+    first.unmount()
+    render(<LogbookScreen />)
+    expect(screen.queryByRole('region', { name: 'Import from MoonBoard' })).toBeNull()
   })
 })
 

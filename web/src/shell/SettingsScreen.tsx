@@ -2,7 +2,8 @@
 // nav's Settings tab (`/settings`). Today it holds only Appearance (theme); it's
 // laid out as labeled Card rows so more settings can slot in later.
 
-import { Monitor, Moon, Sun } from 'lucide-react'
+import { ChevronRight, Download, Monitor, Moon, Sun } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
 import { Card, CardContent } from '@/components/ui/card'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { setTheme, useTheme, type Theme } from './themeStore'
@@ -48,6 +49,24 @@ export function SettingsScreen() {
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-0">
+          <Link
+            to="/logbook/import"
+            className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/50"
+          >
+            <Download className="size-5 shrink-0 text-muted-foreground" />
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium">Import from MoonBoard</div>
+              <div className="mt-0.5 text-xs text-muted-foreground">
+                Bring your logbook over from the official MoonBoard app.
+              </div>
+            </div>
+            <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+          </Link>
         </CardContent>
       </Card>
     </div>
