@@ -46,8 +46,10 @@ def _req(url, key, method, body=None, extra=None):
         headers.update(extra)
     data = json.dumps(body).encode() if body is not None else None
     try:
+        # Read the body INSIDE the context manager — returning the response object would
+        # hand back an already-closed stream (r.read() → b'').
         with urlopen(Request(url, data=data, headers=headers, method=method), timeout=120) as r:
-            return r
+            return r.read()
     except HTTPError as e:
         sys.exit(f"{method} failed ({e.code}): {e.read().decode(errors='replace')}")
 
@@ -58,8 +60,8 @@ def live_ids(base_url, key, layout, angle):
     url = (f"{base_url}/rest/v1/catalog_problems?select=source_catalog_id"
            f"&layout_id=eq.{layout}&angle=eq.{angle}&deleted=is.false&order=source_catalog_id.asc")
     while True:
-        r = _req(url, key, "GET", extra={"Range-Unit": "items", "Range": f"{offset}-{offset + PAGE - 1}"})
-        batch = json.loads(r.read().decode())
+        raw = _req(url, key, "GET", extra={"Range-Unit": "items", "Range": f"{offset}-{offset + PAGE - 1}"})
+        batch = json.loads(raw.decode())
         ids.update(row["source_catalog_id"] for row in batch)
         if len(batch) < PAGE:
             return ids
