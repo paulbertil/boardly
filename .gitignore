@@ -28,3 +28,6 @@ ios/MoonBoardLED/Supabase.xcconfig
 # Python bytecode
 __pycache__/
 *.pyc
+
+# Local catalog table backups (backup_catalog_problems.py) — never commit these
+catalog_problems_backup_*.json
