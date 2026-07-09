@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithRouter } from './test/renderWithRouter'
 import { addBoard, getAddedBoardIds, getAngle } from './board/boardStore'
 import { boardByLayoutId } from './board/boards'
+import { resetLastOpened } from './catalog/lastOpenedStore'
 import { loadSeed } from './catalog/filterSeed'
 import type { CatalogProblem } from './catalog/catalogSync'
 
@@ -32,6 +33,7 @@ vi.mock('./catalog/useSlab', () => ({
 beforeEach(() => {
   localStorage.clear()
   window.dispatchEvent(new StorageEvent('storage')) // reset the boardStore snapshot
+  resetLastOpened() // in-memory session singleton; clear so an open doesn't leak the bar
 })
 
 describe('bare-/ redirect', () => {

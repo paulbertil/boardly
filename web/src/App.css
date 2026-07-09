@@ -1,15 +1,16 @@
-/* Fixed-height app shell: scrolling content (1fr) + the nav as a real bottom row
-   (auto). The browser sizes the content to 100dvh − nav height, so nothing hides
-   behind the nav and there is no magic padding constant to keep in sync. The
-   header is NOT a grid row — it's a sticky frosted bar inside the scroll region
-   (see .app-header), so content scrolls under it and blurs. */
+/* Fixed-height app shell: scrolling content (1fr), a route-owned slot above the nav
+   (auto — zero height when empty), then the nav as a real bottom row (auto). The
+   browser sizes the content to 100dvh − slot − nav, so nothing hides behind them and
+   there is no magic padding constant to keep in sync. The header is NOT a grid row —
+   it's a sticky frosted bar inside the scroll region (see .app-header), so content
+   scrolls under it and blurs. */
 .app-shell {
   height: 100vh; /* fallback */
   height: 100dvh;
   max-width: 480px;
   margin: 0 auto;
   display: grid;
-  grid-template-rows: 1fr auto;
+  grid-template-rows: 1fr auto auto;
   grid-template-columns: 1fr;
 }
 

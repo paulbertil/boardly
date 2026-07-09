@@ -17,6 +17,7 @@
 import { useEffect, useRef, useState, type ReactNode, type UIEvent } from 'react'
 import { useMatchRoute, useNavigate, useSearch } from '@tanstack/react-router'
 import { AccountMenu } from '../auth/AccountMenu'
+import { BottomSlotContext } from './bottomSlot'
 import { useBoardStore } from '../board/boardStore'
 import { catalogNavTarget } from '../catalog/catalogNav'
 import { Navigation, type NavView } from './Navigation'
@@ -78,6 +79,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
     }
     if (pending) void navigate({ to: '/session/join/$token', params: { token: pending } })
   }, [authStatus, matchRoute, navigate])
+
+  // The shell-owned mount point above the nav (see bottomSlot). A ref-callback into
+  // state so consumers re-render once the element commits and can portal into it.
+  const [bottomSlot, setBottomSlot] = useState<HTMLDivElement | null>(null)
 
   // The home tab shown on the collapsed catalog nav — the last home screen visited.
   const [origin, setOrigin] = useState<'boards' | 'logbook' | 'settings'>('boards')
@@ -160,48 +165,57 @@ export function AppLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="app-shell">
-      <main className="app-scroll overflow-x-hidden" onScroll={onScroll}>
-        <header
-          className={cn(
-            // Frosted glass: a translucent background + backdrop blur so the
-            // content scrolling underneath shows through, dimmed and blurred like
-            // a modal scrim. A hairline border and a scroll-lifted shadow seat it.
-            'app-header border-b border-border bg-background/50 backdrop-blur-md transition-shadow',
-            scrolled && 'shadow-sm',
-          )}
-        >
-          {/* Top slot — the environment banners. They self-gate; when all null the
-              slot collapses (`.app-header-slot:empty`), and multiple stack with a
-              gap. Today's env banners are mutually exclusive in real environments,
-              so normally one shows. */}
-          <div className="app-header-slot">
-            <BleBrowserBanner />
-            <InstallBanner />
-            <FullscreenTipBanner />
-          </div>
-          {/* Navbar — avatar / login, right-aligned. */}
-          <div className="flex items-center justify-end gap-2">
-            <AccountMenu />
-          </div>
-          {/* Bottom slot — the collab SessionPill when a session is active, except
-              on the catalog where SessionBar owns that surface. Collapses when empty. */}
-          <div className="app-header-slot">
-            <SessionPill suppressed={onCatalog} />
-          </div>
-        </header>
-        {children}
-      </main>
-      <Navigation
-        view={view}
-        origin={origin}
-        disabled={addedBoards.length === 0 ? ['catalog'] : []}
-        query={field}
-        onQueryChange={onQueryChange}
-        onClear={onClear}
-        onNavigate={go}
-      />
-      <Toaster position="bottom-center" />
-    </div>
+    <BottomSlotContext.Provider value={bottomSlot}>
+      <div className="app-shell">
+        <main className="app-scroll overflow-x-hidden" onScroll={onScroll}>
+          <header
+            className={cn(
+              // Frosted glass: a translucent background + backdrop blur so the
+              // content scrolling underneath shows through, dimmed and blurred like
+              // a modal scrim. A hairline border and a scroll-lifted shadow seat it.
+              'app-header border-b border-border bg-background/50 backdrop-blur-md transition-shadow',
+              scrolled && 'shadow-sm',
+            )}
+          >
+            {/* Top slot — the environment banners. They self-gate; when all null the
+                slot collapses (`.app-header-slot:empty`), and multiple stack with a
+                gap. Today's env banners are mutually exclusive in real environments,
+                so normally one shows. */}
+            <div className="app-header-slot">
+              <BleBrowserBanner />
+              <InstallBanner />
+              <FullscreenTipBanner />
+            </div>
+            {/* Navbar — avatar / login, right-aligned. */}
+            <div className="flex items-center justify-end gap-2">
+              <AccountMenu />
+            </div>
+            {/* Bottom slot — the collab SessionPill when a session is active, except
+                on the catalog where SessionBar owns that surface. Collapses when empty. */}
+            <div className="app-header-slot">
+              <SessionPill suppressed={onCatalog} />
+            </div>
+          </header>
+          {children}
+        </main>
+        {/* Mount point above the nav for route-owned chrome (the catalog last-opened
+            bar). Empty ⇒ zero-height auto grid row, so it costs nothing when unused.
+            min-w-0 + overflow-x-hidden: as a grid item it defaults to min-width:auto,
+            which would let long, unbreakable content (a long problem name) grow the
+            shell past the viewport; this pins it to the column width so the bar's
+            `truncate` produces an ellipsis exactly like the catalog rows. */}
+        <div ref={setBottomSlot} className="min-w-0 overflow-x-hidden" />
+        <Navigation
+          view={view}
+          origin={origin}
+          disabled={addedBoards.length === 0 ? ['catalog'] : []}
+          query={field}
+          onQueryChange={onQueryChange}
+          onClear={onClear}
+          onNavigate={go}
+        />
+        <Toaster position="bottom-center" />
+      </div>
+    </BottomSlotContext.Provider>
   )
 }

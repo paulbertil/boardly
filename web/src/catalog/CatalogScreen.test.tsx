@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CatalogProblem } from './catalogSync'
 import { recordRecent } from './recentsStore'
+import { dismissLastOpened } from './lastOpenedStore'
 import { addBoard } from '../board/boardStore'
 import { renderWithRouter } from '../test/renderWithRouter'
 import { useSlab } from './useSlab'
@@ -111,6 +112,9 @@ vi.mock('../ble/useBle', () => ({
 beforeEach(() => {
   localStorage.clear()
   window.dispatchEvent(new StorageEvent('storage'))
+  // The last-opened store is an in-memory singleton (not localStorage), so reset the
+  // slab this suite uses so an open in one test doesn't leak the bar into the next.
+  dismissLastOpened(LAYOUT, ANGLE)
   vi.clearAllMocks()
   vi.mocked(useSlab).mockReturnValue({ problems: SLAB, loading: false, degraded: false })
   // clearAllMocks keeps mockReturnValue overrides, so reset the auth + ascents stubs
@@ -177,6 +181,58 @@ describe('CatalogScreen — recents open as their own stack', () => {
     expect(next).toBeEnabled()
     fireEvent.click(next)
     expect(await screen.findByRole('heading', { name: 'HiddenC' })).toBeInTheDocument()
+  })
+})
+
+describe('CatalogScreen — last-opened bar', () => {
+  async function closeDrawer(router: { history: { back: () => void }; state: { location: { search: object } } }) {
+    router.history.back()
+    await waitFor(() => expect(router.state.location.search).not.toHaveProperty('problem'))
+  }
+
+  it('is hidden on a cold load and appears after opening then closing a problem', async () => {
+    addBoard(LAYOUT)
+    const { router } = renderWithRouter(`/board/${LAYOUT}/catalog`)
+    await screen.findByText('Visible')
+    // Cold: nothing opened this session → no bar.
+    expect(screen.queryByRole('button', { name: /^Open / })).toBeNull()
+
+    fireEvent.click(screen.getByText('Visible'))
+    await screen.findByRole('heading', { name: 'Visible' })
+    await closeDrawer(router)
+
+    // The bar now offers a one-tap reopen of the just-closed problem.
+    expect(await screen.findByRole('button', { name: 'Open Visible' })).toBeInTheDocument()
+  })
+
+  it('reopens the drawer when the bar body is tapped', async () => {
+    addBoard(LAYOUT)
+    const { router } = renderWithRouter(`/board/${LAYOUT}/catalog`)
+    await screen.findByText('Visible')
+    fireEvent.click(screen.getByText('Visible'))
+    await screen.findByRole('heading', { name: 'Visible' })
+    await closeDrawer(router)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Visible' }))
+    expect(await screen.findByRole('heading', { name: 'Visible' })).toBeInTheDocument()
+  })
+
+  it('dismiss hides the bar; opening another problem brings it back seeded to that one', async () => {
+    addBoard(LAYOUT)
+    const { router } = renderWithRouter(`/board/${LAYOUT}/catalog`)
+    await screen.findByText('Visible')
+    fireEvent.click(screen.getByText('Visible'))
+    await screen.findByRole('heading', { name: 'Visible' })
+    await closeDrawer(router)
+    await screen.findByRole('button', { name: 'Open Visible' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Open Visible' })).toBeNull())
+
+    fireEvent.click(screen.getByText('HiddenB'))
+    await screen.findByRole('heading', { name: 'HiddenB' })
+    await closeDrawer(router)
+    expect(await screen.findByRole('button', { name: 'Open HiddenB' })).toBeInTheDocument()
   })
 })
 
