@@ -242,8 +242,8 @@ export function CatalogScreen() {
           <LastOpenedBar
             board={board}
             angle={angle}
-            displayed={displayed}
             problems={problems}
+            sentIds={sentIds}
             highlightHolds={highlightHolds}
             onOpen={openDrawer}
             onDismiss={() => dismissLastOpened(board.layoutId, angle)}

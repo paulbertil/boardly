@@ -6,7 +6,7 @@ import { LastOpenedBar } from './LastOpenedBar'
 import { dismissLastOpened, recordOpened } from './lastOpenedStore'
 import { isFavorite } from './favoritesStore'
 
-// Isolate the bar from board-art rendering, the previews toggle, and the auth-gated sheet.
+// Isolate the bar from board-art rendering, the previews toggle, and BLE.
 vi.mock('../board/CatalogBoard', () => ({
   CatalogBoard: () => <div data-testid="thumb" />,
 }))
@@ -26,7 +26,7 @@ vi.mock('../ble/useLightUp', () => ({
 const board = boardByLayoutId(7)!
 const ANGLE = 40
 
-function problem(id: string, name: string): CatalogProblem {
+function problem(id: string, name: string, over: Partial<CatalogProblem> = {}): CatalogProblem {
   return {
     source_catalog_id: id,
     layout_id: 7,
@@ -40,24 +40,25 @@ function problem(id: string, name: string): CatalogProblem {
     is_benchmark: false,
     method: null,
     holds: [{ c: 0, r: 1, t: 'start' }],
+    ...over,
   }
 }
 
 const a = problem('a', 'Alpha')
 const b = problem('b', 'Bravo')
-const c = problem('c', 'Charlie')
+const c = problem('c', 'Charlie', { is_benchmark: true })
 const list = [a, b, c]
 
 const onOpen = vi.fn()
 const onDismiss = vi.fn()
 
-function mount(displayed = list, problems = list) {
+function mount(problems = list, sentIds = new Set<string>()) {
   return render(
     <LastOpenedBar
       board={board}
       angle={ANGLE}
-      displayed={displayed}
       problems={problems}
+      sentIds={sentIds}
       onOpen={onOpen}
       onDismiss={onDismiss}
     />,
@@ -91,46 +92,37 @@ describe('LastOpenedBar', () => {
     expect(onOpen).toHaveBeenCalledWith('b')
   })
 
-  it('› scrubs to the next in the filtered list without opening the drawer', () => {
+  it('keeps showing a last-opened climb the filters now exclude', () => {
     recordOpened(7, ANGLE, 'a')
+    // `a` isn't in the filtered set [b, c] but is still resolved from the full slab.
     mount()
-    fireEvent.click(screen.getByRole('button', { name: 'Next problem' }))
-    expect(screen.getByText('Bravo')).toBeInTheDocument()
-    expect(onOpen).not.toHaveBeenCalled()
-    // ‹ goes back.
-    fireEvent.click(screen.getByRole('button', { name: 'Previous problem' }))
     expect(screen.getByText('Alpha')).toBeInTheDocument()
   })
 
-  it('keeps showing a filtered-out climb; › lands on the first filtered entry (R8)', () => {
+  it('updates to a newly-opened problem', () => {
     recordOpened(7, ANGLE, 'a')
-    // `a` is not in the filtered list [b, c] but stays shown, resolved from the full slab.
-    mount([b, c], list)
+    mount()
     expect(screen.getByText('Alpha')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Next problem' }))
-    expect(screen.getByText('Bravo')).toBeInTheDocument()
-  })
-
-  it('disables ‹ at the list start and › at the list end', () => {
-    recordOpened(7, ANGLE, 'a')
-    mount()
-    expect(screen.getByRole('button', { name: 'Previous problem' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Next problem' })).toBeEnabled()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Next problem' })) // → b
-    fireEvent.click(screen.getByRole('button', { name: 'Next problem' })) // → c (last)
-    expect(screen.getByText('Charlie')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Next problem' })).toBeDisabled()
-  })
-
-  it('re-seeds to a new last-opened, discarding the scrub position (R9)', () => {
-    recordOpened(7, ANGLE, 'a')
-    mount()
-    fireEvent.click(screen.getByRole('button', { name: 'Next problem' })) // scrub → b
-    expect(screen.getByText('Bravo')).toBeInTheDocument()
-    // A fresh open elsewhere updates the store → bar jumps to it, scrub cleared.
     act(() => recordOpened(7, ANGLE, 'c'))
     expect(screen.getByText('Charlie')).toBeInTheDocument()
+  })
+
+  it('shows the benchmark icon for a benchmark problem', () => {
+    recordOpened(7, ANGLE, 'c') // c is a benchmark
+    mount()
+    expect(screen.getByRole('img', { name: 'Benchmark' })).toBeInTheDocument()
+  })
+
+  it('shows the sent icon when the shown problem is marked sent', () => {
+    recordOpened(7, ANGLE, 'b')
+    mount(list, new Set(['b']))
+    expect(screen.getByRole('img', { name: 'Sent' })).toBeInTheDocument()
+  })
+
+  it('omits the sent icon when the shown problem is not sent', () => {
+    recordOpened(7, ANGLE, 'b')
+    mount(list, new Set(['a']))
+    expect(screen.queryByRole('img', { name: 'Sent' })).toBeNull()
   })
 
   it('♡ toggles favorite for the shown problem', () => {
