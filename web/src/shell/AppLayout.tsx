@@ -1,5 +1,9 @@
 // The persistent app shell — the root route's chrome, rendered for every route:
-// the account header, the routed <Outlet/>, and the bottom Navigation.
+// a pinned three-slot header (environment-banner slot / navbar with the account
+// menu / optional SessionPill slot), the routed <Outlet/>, and the bottom
+// Navigation. The header is a frosted `position: sticky` bar at the top of the
+// scroll region, so content scrolls under it and blurs through; it lifts a shadow
+// once scrolled.
 //
 // The search field lives here (outside the routes) because it persists across the
 // catalog's problem drawer and must survive board switches. This shell is the one
@@ -10,7 +14,7 @@
 //   • dropping a pending `?q` write when the board changes.
 // Navigation itself stays fully prop-driven.
 
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type UIEvent } from 'react'
 import { useMatchRoute, useNavigate, useSearch } from '@tanstack/react-router'
 import { AccountMenu } from '../auth/AccountMenu'
 import { BottomSlotContext } from './bottomSlot'
@@ -26,6 +30,7 @@ import { initSessions } from '../sessions/sessionsStore'
 import { PENDING_JOIN_KEY } from '../sessions/JoinSession'
 import { useAuth } from '../auth/AuthProvider'
 import { CATALOG_SEARCH_DEFAULTS, type CatalogSearch } from '../catalog/catalogSearch'
+import { cn } from '@/lib/utils'
 
 const Q_DEBOUNCE_MS = 250
 
@@ -136,6 +141,15 @@ export function AppLayout({ children }: { children: ReactNode }) {
     writeQuery('', true)
   }
 
+  // Lift a shadow under the pinned header once the content has scrolled, so it
+  // reads as chrome floating over moving content (flat at rest). Only flip state
+  // on the threshold crossing, not on every scroll frame.
+  const [scrolled, setScrolled] = useState(false)
+  const onScroll = (e: UIEvent<HTMLElement>) => {
+    const next = e.currentTarget.scrollTop > 4
+    setScrolled((prev) => (prev === next ? prev : next))
+  }
+
   const go = (next: NavView) => {
     if (next === 'boards') void navigate({ to: '/boards' })
     else if (next === 'logbook') void navigate({ to: '/logbook' })
@@ -153,13 +167,34 @@ export function AppLayout({ children }: { children: ReactNode }) {
   return (
     <BottomSlotContext.Provider value={bottomSlot}>
       <div className="app-shell">
-        <main className="app-scroll overflow-x-hidden">
-          <BleBrowserBanner />
-          <InstallBanner />
-          <FullscreenTipBanner />
-          <SessionPill suppressed={onCatalog} />
-          <header className="mb-3 flex items-center justify-end gap-2">
-            <AccountMenu />
+        <main className="app-scroll overflow-x-hidden" onScroll={onScroll}>
+          <header
+            className={cn(
+              // Frosted glass: a translucent background + backdrop blur so the
+              // content scrolling underneath shows through, dimmed and blurred like
+              // a modal scrim. A hairline border and a scroll-lifted shadow seat it.
+              'app-header border-b border-border bg-background/50 backdrop-blur-md transition-shadow',
+              scrolled && 'shadow-sm',
+            )}
+          >
+            {/* Top slot — the environment banners. They self-gate; when all null the
+                slot collapses (`.app-header-slot:empty`), and multiple stack with a
+                gap. Today's env banners are mutually exclusive in real environments,
+                so normally one shows. */}
+            <div className="app-header-slot">
+              <BleBrowserBanner />
+              <InstallBanner />
+              <FullscreenTipBanner />
+            </div>
+            {/* Navbar — avatar / login, right-aligned. */}
+            <div className="flex items-center justify-end gap-2">
+              <AccountMenu />
+            </div>
+            {/* Bottom slot — the collab SessionPill when a session is active, except
+                on the catalog where SessionBar owns that surface. Collapses when empty. */}
+            <div className="app-header-slot">
+              <SessionPill suppressed={onCatalog} />
+            </div>
           </header>
           {children}
         </main>

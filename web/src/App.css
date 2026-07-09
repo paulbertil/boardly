@@ -1,7 +1,9 @@
-/* Fixed-height app shell: content region (1fr), a route-owned slot above the nav
+/* Fixed-height app shell: scrolling content (1fr), a route-owned slot above the nav
    (auto — zero height when empty), then the nav as a real bottom row (auto). The
-   browser sizes the content to 100dvh − slot − nav, so nothing ever hides behind
-   them and there is no magic padding constant to keep in sync. */
+   browser sizes the content to 100dvh − slot − nav, so nothing hides behind them and
+   there is no magic padding constant to keep in sync. The header is NOT a grid row —
+   it's a sticky frosted bar inside the scroll region (see .app-header), so content
+   scrolls under it and blurs. */
 .app-shell {
   height: 100vh; /* fallback */
   height: 100dvh;
@@ -12,13 +14,57 @@
   grid-template-columns: 1fr;
 }
 
+/* The sticky top chrome: three stacked slots — an environment-banner slot, the
+   navbar (avatar/login), and an optional bottom slot (the collab SessionPill).
+   Sticks to the top of the scroll region and breaks out of the scroll padding to
+   span the full column width (margin-inline: -1rem), so its frosted backdrop
+   reaches edge to edge while its content stays on the 1rem column. Content scrolls
+   underneath and is blurred by the backdrop-filter (set via Tailwind in the JSX). */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  margin-inline: -1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem 1rem 0.5rem;
+}
+
+/* Where backdrop-filter is unsupported (old Android WebView / Chrome < ~76) the
+   translucent `bg-background/50` alone would let scrolling content bleed through
+   the avatar / banner text — a contrast cliff. Fall back to an opaque background
+   there. Unlayered, so it wins over Tailwind's utilities layer. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .app-header {
+    background-color: var(--background);
+  }
+}
+
+/* A slot stacks its contents with a small gap, so if more than one thing ever
+   lands here (e.g. a future system banner alongside an env banner) they're spaced
+   rather than crammed. Today's env banners are mutually exclusive so normally one
+   shows. */
+.app-header-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Empty slots (a banner that self-gated to null, or no active session) take zero
+   height — no phantom gap between the remaining rows. */
+.app-header-slot:empty {
+  display: none;
+}
+
 /* The only scroll container. min-height:0 lets the 1fr row shrink below its
-   content and actually scroll. */
+   content and actually scroll. No top padding — the sticky .app-header sits flush
+   at the top and provides its own spacing. */
 .app-scroll {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 1rem;
+  padding: 0 1rem 1rem;
   display: flex;
   flex-direction: column;
   gap: 1rem;

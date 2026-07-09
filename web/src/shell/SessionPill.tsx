@@ -24,7 +24,7 @@ export function SessionPill({ suppressed }: { suppressed?: boolean }) {
 
   return (
     <Drawer showSwipeHandle>
-      <DrawerTrigger className="mb-2 flex w-full items-center gap-2 rounded-md border border-border bg-primary/10 px-3 py-1.5 text-sm text-foreground transition hover:bg-primary/15">
+      <DrawerTrigger className="flex w-full items-center gap-2 rounded-md border border-border bg-primary/10 px-3 py-1.5 text-sm text-foreground transition hover:bg-primary/15">
         <Users className="size-4 shrink-0 text-primary" />
         <span className="min-w-0 flex-1 truncate text-left font-medium">{activeSession.name || 'Session'}</span>
         <span className="shrink-0 text-xs text-muted-foreground">
