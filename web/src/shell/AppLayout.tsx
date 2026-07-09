@@ -164,8 +164,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
           {children}
         </main>
         {/* Mount point above the nav for route-owned chrome (the catalog last-opened
-            bar). Empty ⇒ zero-height auto grid row, so it costs nothing when unused. */}
-        <div ref={setBottomSlot} />
+            bar). Empty ⇒ zero-height auto grid row, so it costs nothing when unused.
+            min-w-0 + overflow-x-hidden: as a grid item it defaults to min-width:auto,
+            which would let long, unbreakable content (a long problem name) grow the
+            shell past the viewport; this pins it to the column width so the bar's
+            `truncate` produces an ellipsis exactly like the catalog rows. */}
+        <div ref={setBottomSlot} className="min-w-0 overflow-x-hidden" />
         <Navigation
           view={view}
           origin={origin}
