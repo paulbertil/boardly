@@ -51,25 +51,27 @@ export function InstallBanner() {
 
   return (
     <Card role="region" aria-label="Install Boardhang" className="shrink-0 border-primary/30">
-      <CardContent className="flex items-center gap-3 text-sm">
-        <div className="min-w-0 flex-1 space-y-1">
-          <p className="font-medium">Install Boardhang</p>
-          <p className="text-muted-foreground">
+      <CardContent className="flex flex-col gap-2 text-sm">
+        <div className="flex items-start gap-3">
+          <p className="min-w-0 flex-1 font-medium">Install Boardhang</p>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Dismiss install banner"
+            onClick={dismiss}
+            className="-mt-1 -mr-1 shrink-0"
+          >
+            <X />
+          </Button>
+        </div>
+        <div className="flex items-center gap-3">
+          <p className="min-w-0 flex-1 text-xs text-muted-foreground">
             Add it to your device — a full-screen app that still connects to your board.
           </p>
+          <Button size="sm" onClick={install} className="shrink-0">
+            <Download aria-hidden /> Install
+          </Button>
         </div>
-        <Button size="sm" onClick={install} className="shrink-0">
-          <Download aria-hidden /> Install
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Dismiss install banner"
-          onClick={dismiss}
-          className="-mr-1 shrink-0"
-        >
-          <X />
-        </Button>
       </CardContent>
     </Card>
   )

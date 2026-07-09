@@ -47,27 +47,27 @@ export function FullscreenTipBanner() {
 
   return (
     <Card role="region" aria-label="Go full screen" className="shrink-0 border-primary/30">
-      <CardContent className="flex items-start gap-3 text-sm">
-        <div className="min-w-0 flex-1 space-y-1">
-          <p className="font-medium">Hide the browser bars</p>
-          <p className="text-muted-foreground">
-            In Bluefy, tap the <Menu aria-hidden className="inline size-4 align-text-bottom" /> menu,
-            then{' '}
-            <span className="whitespace-nowrap">
-              <Maximize aria-hidden className="inline size-4 align-text-bottom" /> Enter fullscreen
-            </span>{' '}
-            for a distraction-free view of the wall.
-          </p>
+      <CardContent className="flex flex-col gap-1 text-sm">
+        <div className="flex items-start gap-3">
+          <p className="min-w-0 flex-1 font-medium">Hide the browser bars</p>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Dismiss full-screen tip"
+            onClick={dismiss}
+            className="-mt-1 -mr-1 shrink-0"
+          >
+            <X />
+          </Button>
         </div>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Dismiss full-screen tip"
-          onClick={dismiss}
-          className="-mr-1 shrink-0"
-        >
-          <X />
-        </Button>
+        <p className="text-xs text-muted-foreground">
+          In Bluefy, tap the <Menu aria-hidden className="inline size-4 align-text-bottom" /> menu,
+          then{' '}
+          <span className="whitespace-nowrap">
+            <Maximize aria-hidden className="inline size-4 align-text-bottom" /> Enter fullscreen
+          </span>{' '}
+          for a distraction-free view of the wall.
+        </p>
       </CardContent>
     </Card>
   )

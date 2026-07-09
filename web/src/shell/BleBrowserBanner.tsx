@@ -23,13 +23,13 @@ export function BleBrowserBanner() {
         <div className="space-y-1">
           <p className="font-medium text-destructive">This browser can’t connect to Bluetooth</p>
           {isIosLike() ? (
-            <p className="text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               To light up your MoonBoard on iPhone, open this page in{' '}
               <span className="font-medium text-foreground">Bluefy</span> — a free Bluetooth
               browser from the App Store. Safari can’t talk to the board.
             </p>
           ) : (
-            <p className="text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               To light up your MoonBoard, open this page in{' '}
               <span className="font-medium text-foreground">Google Chrome</span>, which supports
               Web Bluetooth. This browser can’t talk to the board.
