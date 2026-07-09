@@ -7,11 +7,12 @@
 // or angle changes (the store is keyed per slab).
 
 import { useEffect, useMemo } from 'react'
-import { BadgeCheck, CheckCircle2, Heart, Lightbulb, Repeat, Star, X } from 'lucide-react'
+import { BadgeCheck, CheckCircle2, Heart, Lightbulb, X } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CatalogBoardDef } from '../board/boards'
 import { CatalogBoard } from '../board/CatalogBoard'
 import type { CatalogProblem } from './catalogSync'
+import { ProblemMeta } from './ProblemMeta'
 import { useFavorites } from './favoritesStore'
 import { useLastOpened } from './lastOpenedStore'
 import { useShowPreviews } from './previewsStore'
@@ -67,7 +68,6 @@ export function LastOpenedBar({
 
   const isFav = favoriteIds.has(shown.source_catalog_id)
   const isSent = sentIds.has(shown.source_catalog_id)
-  const subtitle = shown.setter ? `by ${shown.setter}` : `${shown.holds.length} holds`
 
   return (
     <div className="border-t border-border bg-background px-2 py-1.5">
@@ -99,21 +99,7 @@ export function LastOpenedBar({
                 {shown.grade}
               </span>
             </div>
-            {/* Metadata row — mirrors CatalogRow: stars · repeats · method · setter. */}
-            <div className="mt-0.5 flex min-w-0 items-center gap-2.5 text-xs text-muted-foreground">
-              {shown.stars > 0 && (
-                <span className="inline-flex shrink-0 items-center gap-0.5">
-                  <Star className="size-3" /> {shown.stars}
-                </span>
-              )}
-              {shown.repeats > 0 && (
-                <span className="inline-flex shrink-0 items-center gap-0.5">
-                  <Repeat className="size-3" /> {shown.repeats}
-                </span>
-              )}
-              {shown.method && <span className="shrink-0 text-foreground/70">{shown.method}</span>}
-              <span className="truncate">{subtitle}</span>
-            </div>
+            <ProblemMeta problem={shown} />
           </div>
         </button>
 
