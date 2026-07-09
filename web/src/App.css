@@ -1,13 +1,14 @@
-/* Fixed-height app shell: content region (1fr) + the nav as a real bottom row
-   (auto). The browser sizes the content to 100dvh − nav height, so nothing ever
-   hides behind the nav and there is no magic padding constant to keep in sync. */
+/* Fixed-height app shell: content region (1fr), a route-owned slot above the nav
+   (auto — zero height when empty), then the nav as a real bottom row (auto). The
+   browser sizes the content to 100dvh − slot − nav, so nothing ever hides behind
+   them and there is no magic padding constant to keep in sync. */
 .app-shell {
   height: 100vh; /* fallback */
   height: 100dvh;
   max-width: 480px;
   margin: 0 auto;
   display: grid;
-  grid-template-rows: 1fr auto;
+  grid-template-rows: 1fr auto auto;
   grid-template-columns: 1fr;
 }
 

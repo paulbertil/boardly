@@ -7,6 +7,7 @@
 // climbable check).
 
 import { useEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { Loader2 } from 'lucide-react'
 import { getRouteApi } from '@tanstack/react-router'
 import { FONT_GRADES, gradeIndex } from '../board/grades'
@@ -18,7 +19,8 @@ import { FilterSheet } from './FilterSheet'
 import { SessionBar } from './SessionBar'
 import { RecentsSheet } from './RecentsSheet'
 import { LastOpenedBar } from './LastOpenedBar'
-import { dismissLastOpened, useLastOpened } from './lastOpenedStore'
+import { dismissLastOpened } from './lastOpenedStore'
+import { useBottomSlot } from '../shell/bottomSlot'
 import { ProblemDetail } from './ProblemDetail'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
 import { Button } from '@/components/ui/button'
@@ -200,9 +202,9 @@ export function CatalogScreen() {
   const openRecent = (stack: CatalogProblem[], index: number) =>
     openDrawer(stack[index].source_catalog_id, stack)
 
-  // The last-opened bar shows once a problem has been opened this session (per slab).
-  // Its presence lifts the FAB column so the History/Filter FABs clear the bar.
-  const barVisible = useLastOpened(board.layoutId, angle) !== null
+  // The last-opened bar renders into the shell's slot above the nav (a real grid row),
+  // so it needs no sticky offset and never overlaps the list or the FAB column.
+  const bottomSlot = useBottomSlot()
 
   return (
     <div className="flex flex-1 flex-col">
@@ -222,29 +224,32 @@ export function CatalogScreen() {
         onSelect={openProblem}
       />
       {/* Shared FAB column: recents on top, filter below (mirrors iOS's VStack).
-          mt-auto pins it to the bottom of the flex-column scroll region; sticky
-          keeps it there as a long list scrolls; pointer-events fall through. When the
-          last-opened bar is present, lift the column so the FABs clear it. */}
-      <div
-        className={`pointer-events-none sticky z-30 mt-auto flex flex-col items-end gap-3 ${
-          barVisible ? 'bottom-[4.75rem]' : 'bottom-4'
-        }`}
-      >
-        <RecentsSheet board={board} angle={angle} problems={problems} favoriteIds={favoriteIds} sentIds={sentIds} onSelect={openRecent} />
-        <FilterSheet state={filters} onChange={setFilters} board={board} gradeSpan={gradeSpan} statusReady={statusReady} signedOut={signedOut} />
+          A zero-height sticky rail (mt-auto pins it to the bottom of the scroll region,
+          sticky keeps it there as a long list scrolls) with the FABs absolutely anchored
+          to it and stacking upward — so the FABs float over the list without reserving
+          any trailing scroll space. pointer-events fall through except on the FABs. */}
+      <div className="pointer-events-none sticky bottom-4 z-30 mt-auto h-0">
+        <div className="absolute bottom-0 right-0 flex flex-col items-end gap-3">
+          <RecentsSheet board={board} angle={angle} problems={problems} favoriteIds={favoriteIds} sentIds={sentIds} onSelect={openRecent} />
+          <FilterSheet state={filters} onChange={setFilters} board={board} gradeSpan={gradeSpan} statusReady={statusReady} signedOut={signedOut} />
+        </div>
       </div>
 
-      {/* Last-opened bar: a slim persistent strip pinned above the nav (KTD1). Renders
-          nothing until a problem has been opened this session. */}
-      <LastOpenedBar
-        board={board}
-        angle={angle}
-        displayed={displayed}
-        problems={problems}
-        highlightHolds={highlightHolds}
-        onOpen={openDrawer}
-        onDismiss={() => dismissLastOpened(board.layoutId, angle)}
-      />
+      {/* Last-opened bar: portaled into the shell's slot so it sits as a real row above
+          the nav. Renders nothing until a problem has been opened this session. */}
+      {bottomSlot &&
+        createPortal(
+          <LastOpenedBar
+            board={board}
+            angle={angle}
+            displayed={displayed}
+            problems={problems}
+            highlightHolds={highlightHolds}
+            onOpen={openDrawer}
+            onDismiss={() => dismissLastOpened(board.layoutId, angle)}
+          />,
+          bottomSlot,
+        )}
 
       <Drawer open={drawerOpen} onOpenChange={(open) => !open && closeDrawer()} showSwipeHandle>
         <DrawerContent>

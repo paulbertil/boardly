@@ -1,10 +1,11 @@
-// The catalog "last opened" bar: a slim, session-only strip pinned above the bottom
-// nav showing the problem you most recently opened for this board+angle. Tap the body
-// to reopen the full drawer; the ‹ › arrows scrub prev/next through the CURRENT filtered
-// list in place (drawer stays closed, nothing persisted — KTD3); ♡ favorites and ➕
-// saves to a list inline; × dismisses until the next open. Renders nothing until a
-// problem has been opened this session (useLastOpened is null on a cold load), and blanks
-// when the board or angle changes (the store is keyed per slab).
+// The catalog "last opened" bar: a slim, session-only strip showing the problem you
+// most recently opened for this board+angle. CatalogScreen portals it into the shell's
+// bottom slot (see bottomSlot), so it sits as a real layout row directly above the nav.
+// Tap the body to reopen the full drawer; the ‹ › arrows scrub prev/next through the
+// CURRENT filtered list in place (drawer stays closed, nothing persisted — KTD3); ♡
+// favorites and 💡 lights up the holds over BLE inline; × dismisses until the next open.
+// Renders nothing until a problem has been opened this session (useLastOpened is null on
+// a cold load), and blanks when the board or angle changes (the store is keyed per slab).
 
 import { useEffect, useState } from 'react'
 import { ChevronLeft, ChevronRight, Heart, Lightbulb, X } from 'lucide-react'
@@ -73,7 +74,7 @@ export function LastOpenedBar({
   const subtitle = shown.setter ? `by ${shown.setter}` : `${shown.holds.length} holds`
 
   return (
-    <div className="sticky -bottom-4 z-20 -mx-4 border-t border-border bg-background/95 px-2 py-1.5 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+    <div className="border-t border-border bg-background px-2 py-1.5">
       <div className="flex items-center gap-1">
         {/* Body: thumbnail + identity — tap to reopen the full drawer (R5). */}
         <button

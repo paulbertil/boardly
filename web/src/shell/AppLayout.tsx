@@ -13,6 +13,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useMatchRoute, useNavigate, useSearch } from '@tanstack/react-router'
 import { AccountMenu } from '../auth/AccountMenu'
+import { BottomSlotContext } from './bottomSlot'
 import { useBoardStore } from '../board/boardStore'
 import { catalogNavTarget } from '../catalog/catalogNav'
 import { Navigation, type NavView } from './Navigation'
@@ -73,6 +74,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
     }
     if (pending) void navigate({ to: '/session/join/$token', params: { token: pending } })
   }, [authStatus, matchRoute, navigate])
+
+  // The shell-owned mount point above the nav (see bottomSlot). A ref-callback into
+  // state so consumers re-render once the element commits and can portal into it.
+  const [bottomSlot, setBottomSlot] = useState<HTMLDivElement | null>(null)
 
   // The home tab shown on the collapsed catalog nav — the last home screen visited.
   const [origin, setOrigin] = useState<'boards' | 'logbook' | 'settings'>('boards')
@@ -146,27 +151,32 @@ export function AppLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="app-shell">
-      <main className="app-scroll overflow-x-hidden">
-        <BleBrowserBanner />
-        <InstallBanner />
-        <FullscreenTipBanner />
-        <SessionPill suppressed={onCatalog} />
-        <header className="mb-3 flex items-center justify-end gap-2">
-          <AccountMenu />
-        </header>
-        {children}
-      </main>
-      <Navigation
-        view={view}
-        origin={origin}
-        disabled={addedBoards.length === 0 ? ['catalog'] : []}
-        query={field}
-        onQueryChange={onQueryChange}
-        onClear={onClear}
-        onNavigate={go}
-      />
-      <Toaster position="bottom-center" />
-    </div>
+    <BottomSlotContext.Provider value={bottomSlot}>
+      <div className="app-shell">
+        <main className="app-scroll overflow-x-hidden">
+          <BleBrowserBanner />
+          <InstallBanner />
+          <FullscreenTipBanner />
+          <SessionPill suppressed={onCatalog} />
+          <header className="mb-3 flex items-center justify-end gap-2">
+            <AccountMenu />
+          </header>
+          {children}
+        </main>
+        {/* Mount point above the nav for route-owned chrome (the catalog last-opened
+            bar). Empty ⇒ zero-height auto grid row, so it costs nothing when unused. */}
+        <div ref={setBottomSlot} />
+        <Navigation
+          view={view}
+          origin={origin}
+          disabled={addedBoards.length === 0 ? ['catalog'] : []}
+          query={field}
+          onQueryChange={onQueryChange}
+          onClear={onClear}
+          onNavigate={go}
+        />
+        <Toaster position="bottom-center" />
+      </div>
+    </BottomSlotContext.Provider>
   )
 }
