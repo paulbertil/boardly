@@ -308,7 +308,7 @@ export function CatalogScreen() {
       <div className="pointer-events-none sticky bottom-4 z-30 mt-auto h-0">
         <div className="absolute bottom-0 right-0 flex flex-col items-end gap-3">
           <RecentsSheet board={board} angle={angle} problems={problems} favoriteIds={favoriteIds} sentIds={sentIds} onSelect={openRecent} />
-          <FilterSheet state={filters} onChange={setFilters} board={board} gradeSpan={gradeSpan} statusReady={statusReady} signedOut={signedOut} />
+          <FilterSheet state={filters} onChange={setFilters} board={board} gradeSpan={gradeSpan} statusReady={statusReady} signedOut={signedOut} boardLists={boardLists} />
         </div>
       </div>
 

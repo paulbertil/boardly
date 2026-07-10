@@ -88,9 +88,11 @@ date: 2026-07-10
   the result is `(in any selected list) AND (matches grade) AND (favorited) AND …`.
 - **R3 — Two entry points, one shared state.** Both write the **same** URL param, so the state
   is identical however it was set:
-  1. **Catalog pill bar (primary):** a **"Lists" control** in the filter pill bar opens a
-     **multi-select picker** of the user's lists **for the current board**; each picked list
-     becomes a removable chip.
+  1. **Catalog filter surfaces:** a **"Lists" control** in the header pill bar opens a
+     **multi-select picker** of the user's lists **for the current board** (each picked list
+     becomes a removable chip), **and** the filter bottom sheet carries a **"Saved lists"**
+     section with one multi-select pill per list — both drive the same `listFilter`, hidden when
+     the board has no lists.
   2. **Lists screen bridge:** list cards and `ListDetailScreen` gain a **"Show in catalog"**
      action that deep-links into the catalog with that list applied.
 - **R4 — Hidden when there's nothing to pick.** The "Lists" control appears **only** when the
