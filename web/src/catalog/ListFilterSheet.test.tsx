@@ -43,4 +43,18 @@ describe('ListFilterSheet', () => {
     fireEvent.click(screen.getByRole('button', { name: /Remove Projects/ }))
     expect(onChange).toHaveBeenCalledWith(['b'])
   })
+
+  it('shows "Clear all" only with a selection, and it clears every id', () => {
+    const onChange = vi.fn()
+    const { rerender } = render(
+      <ListFilterSheet open onOpenChange={() => {}} boardLists={boardLists} selected={[]} onChange={onChange} />,
+    )
+    expect(screen.queryByRole('button', { name: 'Clear all' })).toBeNull()
+
+    rerender(
+      <ListFilterSheet open onOpenChange={() => {}} boardLists={boardLists} selected={['a', 'b']} onChange={onChange} />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Clear all' }))
+    expect(onChange).toHaveBeenCalledWith([])
+  })
 })
