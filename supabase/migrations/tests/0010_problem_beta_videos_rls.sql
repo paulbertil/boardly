@@ -49,6 +49,8 @@ do $$
 begin
     assert (select count(*) from public.problem_beta_videos) = 1,
         'FAIL: authenticated sees more than approved live rows';
+    assert (select video_id from public.problem_beta_videos) = 'vid-approved',
+        'FAIL: authenticated sees the wrong row (pending/rejected/deleted leaked)';
     raise notice 'PASS: authenticated reads approved+live only';
 end $$;
 
@@ -100,6 +102,15 @@ begin
     insert into public.problem_beta_videos (source_catalog_id, video_id, source, status)
         values ('prob-A', 'vid-approved', 'seed', 'approved');
     raise notice 'PASS: a soft-deleted clip can be re-added (partial index, not table constraint)';
+end $$;
+
+do $$
+begin
+    -- provider is part of the dedupe key: the SAME (problem, video) on a different provider is
+    -- a distinct clip and must be allowed (guards against the index dropping the provider col).
+    insert into public.problem_beta_videos (source_catalog_id, provider, video_id, source, status)
+        values ('prob-A', 'instagram', 'vid-approved', 'seed', 'approved');
+    raise notice 'PASS: same (problem, video) on a different provider is allowed (provider in dedupe key)';
 end $$;
 
 \echo 'ALL 0010 RLS ASSERTIONS PASSED'

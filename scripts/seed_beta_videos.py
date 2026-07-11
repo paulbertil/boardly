@@ -100,7 +100,14 @@ def _yt_get(url, params):
             return json.load(r)
     except HTTPError as e:
         if e.code in (403, 429):
-            raise QuotaExhausted(e.read().decode(errors="replace")[:300]) from e
+            # A 403 is quota ONLY when the body says so — it also covers keyInvalid /
+            # accessNotConfigured / ipRefererBlocked, none of which clear by waiting a day.
+            # Misreporting those as "quota, resume tomorrow" sends the operator to wait on a
+            # bug that never resolves, so re-raise anything that isn't a rate/quota reason.
+            body = e.read().decode(errors="replace")
+            if e.code == 429 or "quotaExceeded" in body or "rateLimitExceeded" in body:
+                raise QuotaExhausted(body[:300]) from e
+            sys.exit(f"YouTube API error {e.code} (not quota): {body[:300]}")
         raise
 
 
@@ -276,6 +283,8 @@ def run_seed(args, yt_key, base_url, sb_key):
 def run_from_file(args, base_url, sb_key):
     """Insert previously-matched rows from a sidecar JSON (written by a prior run). No YouTube
     calls — this is the zero-quota recovery path when a seed matched but the write failed."""
+    if not os.path.exists(args.from_file):
+        sys.exit(f"No such sidecar file: {args.from_file}")
     rows = json.load(open(args.from_file))
     print(f"Loaded {len(rows)} matched rows from {args.from_file}")
     if not rows:
@@ -309,12 +318,17 @@ def run_revalidate(args, yt_key, base_url, sb_key):
     if not dead or args.dry_run:
         print("[dry-run] not soft-deleting." if args.dry_run and dead else "Nothing to do.")
         return
+    done = 0
     for c in dead:  # soft-delete each dead row by id
-        u = f"{base_url}/rest/v1/problem_beta_videos?id=eq.{c['id']}"
+        u = f"{base_url}/rest/v1/problem_beta_videos?id=eq.{urllib.parse.quote(str(c['id']))}"
         req = Request(u, data=json.dumps({"deleted": True}).encode(),
                       headers=_sb_headers(sb_key, {"Prefer": "return=minimal"}), method="PATCH")
-        urlopen(req, timeout=30)
-    print(f"Soft-deleted {len(dead)} dead clips.")
+        try:
+            with urlopen(req, timeout=30):  # context-manage so the connection is released
+                done += 1
+        except HTTPError as e:  # one bad PATCH shouldn't abort the whole sweep
+            print(f"  ! soft-delete failed for {c['id']} ({e.code}); continuing")
+    print(f"Soft-deleted {done}/{len(dead)} dead clips.")
 
 
 def main():

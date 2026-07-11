@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { BetaVideo } from './betaTypes'
@@ -22,6 +22,12 @@ function watchUrl(v: BetaVideo): string {
 export function BetaPlayerSheet({ video, onClose }: { video: BetaVideo | null; onClose: () => void }) {
   const [loaded, setLoaded] = useState(false)
   const close = useCallback(() => onClose(), [onClose])
+  // Read the latest close from a ref so the history effect below depends only on the opened
+  // clip, not on close's identity — otherwise an unstable parent onClose re-runs the effect on
+  // every render, firing history.back() and spuriously closing the sheet (React 18 StrictMode
+  // reproduces it on mount).
+  const closeRef = useRef(close)
+  closeRef.current = close
 
   useEffect(() => {
     setLoaded(false) // reset the loading placeholder for each newly-opened clip
@@ -30,14 +36,15 @@ export function BetaPlayerSheet({ video, onClose }: { video: BetaVideo | null; o
   useEffect(() => {
     if (!video) return
     window.history.pushState({ betaSheet: true }, '')
-    const onPop = (): void => close()
+    const onPop = (): void => closeRef.current()
     window.addEventListener('popstate', onPop)
     return () => {
       window.removeEventListener('popstate', onPop)
       // Closing via UI (not the back button): pop the entry we pushed so history stays clean.
       if (window.history.state?.betaSheet) window.history.back()
     }
-  }, [video, close])
+    // Depend only on the opened clip's identity (stable per open) — NOT close.
+  }, [video])
 
   return (
     <Dialog

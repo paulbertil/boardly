@@ -234,7 +234,7 @@ export function ProblemDetail({
     // problem and Beta is below the fold; snap-proximity settles a scroll onto either page.
     <div
       className="snap-y snap-proximity overflow-y-auto overscroll-contain px-4"
-      style={{ maxHeight: '85dvh', height: detailsHeight && detailsHeight + BETA_PEEK }}
+      style={{ maxHeight: '85dvh', height: detailsHeight ? detailsHeight + BETA_PEEK : undefined }}
     >
       <div ref={detailsRef} className="flex snap-start flex-col gap-4 py-4">
       <div className="flex items-start justify-between gap-2">
