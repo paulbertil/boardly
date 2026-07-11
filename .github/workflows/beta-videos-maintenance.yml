@@ -1,0 +1,67 @@
+name: Beta videos maintenance
+
+# Keeps public.problem_beta_videos healthy:
+#   • scheduled (weekly): --revalidate — checks every stored clip against the YouTube API and
+#     soft-deletes ones that were deleted/privatised/removed since seeding (1 unit / 50 ids,
+#     so trivially cheap). Without this, dead clips accumulate and users tap into a broken
+#     "Video unavailable" player (code-review finding #3 / #1).
+#   • manual (workflow_dispatch): also lets you run the next --seed batch straight from GitHub
+#     (no local keys needed once the repo secrets below are set).
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   YOUTUBE_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (service_role — bypasses RLS).
+# Until they're set the job no-ops with a warning rather than failing every week.
+
+on:
+  schedule:
+    - cron: '17 7 * * 1' # Mondays 07:17 UTC — revalidate
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'revalidate (prune dead clips) or seed (import the next batch)'
+        type: choice
+        options: [revalidate, seed]
+        default: revalidate
+      board:
+        description: 'Board to seed (seed mode only)'
+        type: choice
+        options: [mini2025, '2019']
+        default: mini2025
+      limit:
+        description: 'Max problems to process this seed run (seed mode only)'
+        default: '100'
+
+concurrency:
+  group: beta-videos-maintenance
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run maintenance
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # Scheduled runs carry no inputs, so default to revalidate.
+          MODE: ${{ github.event.inputs.mode || 'revalidate' }}
+          BOARD: ${{ github.event.inputs.board || 'mini2025' }}
+          LIMIT: ${{ github.event.inputs.limit || '100' }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ] || [ -z "$YOUTUBE_API_KEY" ]; then
+            echo "::warning::Beta maintenance secrets not configured; skipping. Set YOUTUBE_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY in repo Actions secrets."
+            exit 0
+          fi
+          if [ "$MODE" = "seed" ]; then
+            echo "Seeding $BOARD (limit $LIMIT)…"
+            python3 scripts/seed_beta_videos.py --board "$BOARD" --limit "$LIMIT"
+          else
+            echo "Revalidating stored beta clips…"
+            python3 scripts/seed_beta_videos.py --revalidate
+          fi
