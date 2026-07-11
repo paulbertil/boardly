@@ -6,9 +6,10 @@
 // the single useSlab and derives the filter context (favorites + installed-hold-set
 // climbable check).
 
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { getRouteApi } from '@tanstack/react-router'
 import { FONT_GRADES, gradeIndex } from '../board/grades'
 import { boardByLayoutId, defaultAngle } from '../board/boards'
@@ -26,6 +27,7 @@ import { useHeaderFilterSlot } from '../shell/headerFilterSlot'
 import { ProblemDetail } from './ProblemDetail'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { applyFilters, type FilterContext, type FilterState } from './filters'
 import { filtersToSearch, searchToFilters } from './catalogSearch'
 import { saveSeed } from './filterSeed'
@@ -33,6 +35,7 @@ import { useFavorites } from './favoritesStore'
 import { loadLists, useSavedLists } from '../lists/listsStore'
 import { useListMemberIds } from '../lists/useListMemberIds'
 import { useSlab } from './useSlab'
+import { usePullToRefresh } from './usePullToRefresh'
 import { useProblemDrawer } from './useProblemDrawer'
 import { useEnsureAscentsLoaded } from '../logbook/ascents'
 import { useAuth } from '../auth/AuthProvider'
@@ -63,7 +66,7 @@ export function CatalogScreen() {
     if (getAngle(board) !== angle) setAngle(board.layoutId, angle)
   }, [board, angle])
 
-  const { problems, loading, degraded } = useSlab(board.layoutId, angle)
+  const { problems, loading, degraded, resync } = useSlab(board.layoutId, angle)
   const { favoriteIds } = useFavorites()
 
   // Logged sends → the green "sent" check on rows/detail (iOS parity). The ascents
@@ -250,6 +253,24 @@ export function CatalogScreen() {
   const problemPending = Boolean(openId) && !current && loading
   const drawerOpen = current !== undefined || problemPending
 
+  // Pull-to-refresh: a downward drag at the top of the list forces a full slab re-pull
+  // (resets the sync cursor), repairing a stale/incomplete cache — e.g. a slab cached
+  // before a catalog re-import. Disabled while the problem drawer is open so it can't
+  // fire under the overlay. The anchor lives at the top of the scroll content.
+  const pullAnchorRef = useRef<HTMLDivElement>(null)
+  const pull = usePullToRefresh(
+    pullAnchorRef,
+    async () => {
+      const synced = await resync()
+      // Top-center: the gesture originates at the top of the list, so the confirmation
+      // reads there rather than at the app-default bottom (per-toast position override).
+      toast(synced ? 'Catalog synced' : 'Offline — showing cached catalog', {
+        position: 'top-center',
+      })
+    },
+    !drawerOpen,
+  )
+
   // List taps: page over the filtered list (no snapshot). Recent taps: page over the
   // recents snapshot RecentsSheet hands over.
   const openProblem = (problem: CatalogProblem) => openDrawer(problem.source_catalog_id)
@@ -278,6 +299,23 @@ export function CatalogScreen() {
           />,
           headerFilterSlot,
         )}
+      {/* Pull-to-refresh indicator: a zero-height strip at the top of the scroll content
+          that grows as the user drags down (see usePullToRefresh). Snaps back with a
+          transition on release; held open with a spinner while the resync runs. */}
+      <div
+        ref={pullAnchorRef}
+        aria-hidden={pull.distance === 0}
+        className="flex items-end justify-center overflow-hidden"
+        style={{ height: pull.distance, transition: pull.pulling ? undefined : 'height 200ms ease-out' }}
+      >
+        <div className="flex items-center gap-2 pb-2 text-xs text-muted-foreground">
+          <Loader2
+            className={cn('size-4', pull.refreshing && 'animate-spin')}
+            style={pull.refreshing ? undefined : { transform: `rotate(${Math.round(pull.distance * 4)}deg)` }}
+          />
+          <span>{pull.refreshing ? 'Syncing…' : pull.armed ? 'Release to sync' : 'Pull to sync'}</span>
+        </div>
+      </div>
       {!added && <UnaddedBoardBanner name={board.name} onAdd={() => addBoard(board.layoutId)} />}
       <SessionBar board={board} />
       <CatalogList

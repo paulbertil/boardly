@@ -148,7 +148,7 @@ beforeEach(() => {
   // slab this suite uses so an open in one test doesn't leak the bar into the next.
   dismissLastOpened(LAYOUT, ANGLE)
   vi.clearAllMocks()
-  vi.mocked(useSlab).mockReturnValue({ problems: SLAB, loading: false, degraded: false })
+  vi.mocked(useSlab).mockReturnValue({ problems: SLAB, loading: false, degraded: false, resync: vi.fn().mockResolvedValue(true) })
   // clearAllMocks keeps mockReturnValue overrides, so reset the auth + ascents stubs
   // to their defaults each test (else a signed-in / ascent-heavy test leaks forward).
   vi.mocked(useAuth).mockReturnValue(authValue('signedOut'))
@@ -273,7 +273,7 @@ describe('CatalogScreen — last-opened bar', () => {
 
 describe('CatalogScreen — deep-linked problem loading', () => {
   it('shows a loading state for a deep-linked problem while its slab is still syncing', async () => {
-    vi.mocked(useSlab).mockReturnValue({ problems: [], loading: true, degraded: false })
+    vi.mocked(useSlab).mockReturnValue({ problems: [], loading: true, degraded: false, resync: vi.fn().mockResolvedValue(true) })
     addBoard(LAYOUT)
     renderWithRouter(`/board/${LAYOUT}/catalog?problem=782b2b3b`)
     // The slab hasn't resolved, so the drawer opens on a spinner rather than nothing.
