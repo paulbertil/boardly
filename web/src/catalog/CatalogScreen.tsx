@@ -41,6 +41,7 @@ import { useEnsureAscentsLoaded } from '../logbook/ascents'
 import { useAuth } from '../auth/AuthProvider'
 import { useSessions } from '../sessions/sessionsStore'
 import { useMemberAscents } from '../sessions/memberAscentsStore'
+import { useSessionRealtime } from '../sessions/sessionRealtime'
 import { useMemberSenders } from './useMemberSenders'
 import type { CatalogProblem } from './catalogSync'
 
@@ -115,6 +116,11 @@ export function CatalogScreen() {
   const sessionForBoard =
     activeSession && activeSession.boardLayoutId === board.layoutId ? activeSession : null
   const memberAsc = useMemberAscents(sessionForBoard?.id ?? null)
+  // Push: keep the cross-member projection live via the session's Broadcast channel. Keyed on
+  // the SAME signal as the projection above, so it subscribes exactly when the projection is
+  // active and tears down when the session retires (id → null on leave/end/expiry/sign-out).
+  // Purely additive to the pull model — a dropped socket degrades to manual/foreground refresh.
+  useSessionRealtime(sessionForBoard?.id ?? null)
   // Per-row "who sent it" sends pill (crew, self included). Reads the same session + projection
   // stores directly (no prop drilling), mirroring the useSessionFilterRows pattern; undefined
   // when no session targets this board.
