@@ -146,6 +146,17 @@ def search(name, suffix, key):
     } for it in data.get("items", []) if it["id"].get("videoId")]
 
 
+def _video_metrics(it):
+    """duration_s / is_short / views from one videos.list item. Shared by the seed enrich() and the
+    user-submission fetch_video_meta() so Short-detection and view-count handling can't drift."""
+    secs = iso_to_secs(it.get("contentDetails", {}).get("duration"))
+    return {
+        "duration_s": secs,
+        "is_short": secs is not None and secs <= SHORT_MAX_SECS,
+        "views": int(it.get("statistics", {}).get("viewCount") or 0),
+    }
+
+
 def enrich(cands, key):
     """Attach duration + views (one videos.list call for the whole candidate batch)."""
     if not cands:
@@ -155,11 +166,7 @@ def enrich(cands, key):
         VIDEOS_URL, {"part": "contentDetails,statistics", "id": ids, "key": key}
     ).get("items", [])}
     for c in cands:
-        it = meta.get(c["video_id"], {})
-        secs = iso_to_secs(it.get("contentDetails", {}).get("duration"))
-        c["duration_s"] = secs
-        c["is_short"] = secs is not None and secs <= SHORT_MAX_SECS
-        c["views"] = int(it.get("statistics", {}).get("viewCount") or 0)
+        c.update(_video_metrics(meta.get(c["video_id"], {})))
     return cands
 
 
@@ -175,14 +182,10 @@ def fetch_video_meta(video_ids, key):
         got = _yt_get(VIDEOS_URL, {"part": "snippet,contentDetails,statistics",
                                    "id": ",".join(chunk), "key": key})
         for it in got.get("items", []):
-            secs = iso_to_secs(it.get("contentDetails", {}).get("duration"))
-            meta[it["id"]] = {
-                "title": it.get("snippet", {}).get("title", ""),
-                "channel": it.get("snippet", {}).get("channelTitle", ""),
-                "views": int(it.get("statistics", {}).get("viewCount") or 0),
-                "duration_s": secs,
-                "is_short": secs is not None and secs <= SHORT_MAX_SECS,
-            }
+            m = _video_metrics(it)
+            m["title"] = it.get("snippet", {}).get("title", "")
+            m["channel"] = it.get("snippet", {}).get("channelTitle", "")
+            meta[it["id"]] = m
     return meta
 
 
@@ -405,10 +408,15 @@ def run_enrich_pending(args, yt_key, base_url, sb_key):
     approve (owner flipped status before enriching) is still repairable — not just `pending`.
     Does NOT approve; approval stays a manual dashboard action. Then prints the pending moderation
     queue (the authoritative reconciliation list, independent of the notification), flagging
-    non-Shorts so a long compilation is a one-glance reject."""
+    non-Shorts so a long compilation is a one-glance reject.
+
+    The "needs enrichment" signal is `channel = ''` ONLY — a successful videos.list always returns
+    a channelTitle, so a fetched row is done. We deliberately do NOT re-select on
+    `duration_s is null`: a live stream / premiere legitimately has no duration, and filtering on
+    it would re-fetch that row (burning a quota unit) on every run forever without ever clearing."""
     q = ("?select=id,source_catalog_id,video_id,status"
          "&source=eq.user&deleted=eq.false&status=in.(pending,approved)"
-         "&or=(channel.eq.,duration_s.is.null)")
+         "&channel=eq.")
     req = Request(f"{base_url}/rest/v1/problem_beta_videos{q}",
                   headers=_sb_headers(sb_key, {"Range-Unit": "items", "Range": "0-99999"}))
     with urlopen(req, timeout=60) as r:

@@ -34,15 +34,20 @@ begin
 end $$;
 
 -- ── Authenticated user submits a VALID pending user row → succeeds ────────────
+-- Configure the notification webhook in the LOCKED config table as the service-role equivalent
+-- (superuser). The trigger reads it via SECURITY DEFINER; the stub net.http_post logs the url it
+-- was called with into net._test_calls, so we can assert both that it fired and WHICH url it hit.
 reset role;
+update public.beta_notify_config set webhook_url = 'https://example.test/beta-hook' where id = 1;
+
 set role authenticated;
 select set_config('test.uid', :'U', false);
--- Configure the notification webhook so the AFTER-INSERT trigger actually posts (the stub
--- net.http_post logs into net._test_calls); an unset URL makes the trigger a no-op.
-select set_config('app.beta_webhook_url', 'https://example.test/beta-hook', false);
+-- SSRF guard (P1): a signed-in user can still SET the old custom GUC in their own session, but the
+-- trigger no longer reads it — so it must have NO effect on where the POST goes.
+select set_config('app.beta_webhook_url', 'http://169.254.169.254/latest/meta-data/', false);
 
 do $$
-declare _before int; _after int;
+declare _before int; _after int; _url text;
 begin
     select count(*) into _before from net._test_calls;
     insert into public.problem_beta_videos (source_catalog_id, video_id, source, status, added_by)
@@ -50,7 +55,11 @@ begin
     select count(*) into _after from net._test_calls;
     assert _after = _before + 1,
         'FAIL: user insert did not fire the notification trigger exactly once';
-    raise notice 'PASS: authenticated submits a valid pending user beta (+ notification fired)';
+    select url into _url from net._test_calls order by id desc limit 1;
+    assert _url = 'https://example.test/beta-hook',
+        'FAIL: notification POSTed to ' || coalesce(_url, '<null>')
+        || ' — a user-set GUC redirected it (SSRF regression)';
+    raise notice 'PASS: valid pending submission fires notification to the LOCKED config url (session GUC ignored — no SSRF)';
 end $$;
 
 -- The pending row is invisible to the submitter's own reads (approved-only gate from 0010).
@@ -192,11 +201,29 @@ begin
     raise notice 'PASS: notification trigger does not fire on a seed insert';
 end $$;
 
+-- ── Reject invariant: a rejected row MUST be soft-deleted (CHECK, not just runbook) ──
+-- Superuser (service-role equivalent) performs moderation. A status-only reject would strand the
+-- `where not deleted` dedupe tuple, so the CHECK must forbid it; reject WITH deleted=true is fine.
+do $$
+begin
+    begin
+        update public.problem_beta_videos set status = 'rejected'
+            where source_catalog_id = 'prob-A' and video_id = 'BBBBBBBBBBB';  -- deleted stays false
+        raise exception 'FAIL: status-only reject allowed (would strand the dedupe tuple)';
+    exception when check_violation then
+        raise notice 'PASS: status-only reject blocked by CHECK (must soft-delete)';
+    end;
+    update public.problem_beta_videos set status = 'rejected', deleted = true
+        where source_catalog_id = 'prob-A' and video_id = 'BBBBBBBBBBB';
+    raise notice 'PASS: reject WITH deleted=true is allowed';
+end $$;
+
+-- Reset the notification target so the cap test below doesn't spam the stub log.
+update public.beta_notify_config set webhook_url = '' where id = 1;
+
 -- ── Rate limit: 10 pending per user, 11th denied, freed by moderation ─────────
 set role authenticated;
 select set_config('test.uid', :'U2', false);
--- Unset the webhook so the cap test doesn't spam the stub log (keeps intent focused).
-select set_config('app.beta_webhook_url', '', false);
 do $$
 declare i int;
 begin

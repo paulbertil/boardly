@@ -11,6 +11,8 @@ describe('extractYouTubeId', () => {
     expect(extractYouTubeId(`https://www.youtube.com/embed/${ID}`)).toBe(ID)
     expect(extractYouTubeId(`https://www.youtube.com/live/${ID}`)).toBe(ID)
     expect(extractYouTubeId(`https://m.youtube.com/watch?v=${ID}`)).toBe(ID)
+    expect(extractYouTubeId(`https://music.youtube.com/watch?v=${ID}`)).toBe(ID)
+    expect(extractYouTubeId(`https://www.youtube-nocookie.com/embed/${ID}`)).toBe(ID)
   })
 
   it('ignores extra query params and fragments', () => {
