@@ -151,7 +151,12 @@ function DrawerContent({
           <DrawerPrimitive.Content
             data-slot="drawer-content"
             className={cn(
-              "flex min-h-0 flex-1 flex-col overflow-hidden overscroll-contain rounded-[inherit] transition-opacity duration-300 ease-[cubic-bezier(0.45,1.005,0,1.005)] select-text group-data-nested-drawer-open/drawer-popup:opacity-0 group-data-nested-drawer-swiping/drawer-popup:opacity-100 group-data-swiping/drawer-popup:select-none"
+              "flex min-h-0 flex-1 flex-col overflow-hidden overscroll-contain rounded-[inherit] transition-opacity duration-300 ease-[cubic-bezier(0.45,1.005,0,1.005)] select-text group-data-nested-drawer-open/drawer-popup:opacity-0 group-data-nested-drawer-swiping/drawer-popup:opacity-100 group-data-swiping/drawer-popup:select-none",
+              // Bottom sheets span the full viewport (they portal outside
+              // `.app-shell`, which caps the app at 480px), so cap and center
+              // their content to match. Side drawers are already width-capped
+              // by the popup.
+              "group-data-[swipe-axis=y]/drawer-popup:mx-auto group-data-[swipe-axis=y]/drawer-popup:w-full group-data-[swipe-axis=y]/drawer-popup:max-w-[480px]"
             )}
           >
             {children}
