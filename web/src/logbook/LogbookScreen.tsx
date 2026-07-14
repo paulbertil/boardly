@@ -12,6 +12,7 @@ import { getCatalogProblemsByIds, type CatalogProblem } from '../catalog/catalog
 import { useFavorites } from '../catalog/favoritesStore'
 import { ProblemDetail } from '../catalog/ProblemDetail'
 import { useProblemDrawer } from '../catalog/useProblemDrawer'
+import { useShowPreviews } from '../catalog/previewsStore'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
@@ -100,6 +101,7 @@ export function LogbookScreen() {
   const displayed = pagerStack ?? (current ? [current] : [])
 
   const { favoriteIds } = useFavorites()
+  const showThumbnails = useShowPreviews('logbook')
   // Logged sends → the green sent check on the detail (iOS parity), mirroring
   // CatalogScreen. Board-scoped; attempts (sent === false) excluded.
   const sentIds = useMemo(
@@ -241,7 +243,7 @@ export function LogbookScreen() {
                       ascent={ascent}
                       catalog={catalog}
                       board={activeBoard}
-                      showThumbnail
+                      showThumbnail={showThumbnails}
                       onEdit={openEdit}
                       onSelect={
                         catalog

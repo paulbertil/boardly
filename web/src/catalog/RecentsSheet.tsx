@@ -29,7 +29,8 @@ interface RecentsSheetProps {
 
 export function RecentsSheet({ board, angle, problems, favoriteIds, sentIds, onSelect }: RecentsSheetProps) {
   const [open, setOpen] = useState(false)
-  const showThumbnails = useShowPreviews()
+  // Follows the catalog toggle — the recents sheet is part of catalog browsing.
+  const showThumbnails = useShowPreviews('catalog')
   const recentIds = useRecents(board.layoutId, angle)
 
   // Resolve ids to problems against the full slab, preserving recents order and

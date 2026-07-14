@@ -86,7 +86,7 @@ export function ListDetailScreen() {
   )
 
   const { favoriteIds } = useFavorites()
-  const showThumbnails = useShowPreviews()
+  const showThumbnails = useShowPreviews('lists')
   // Logged sends → the green sent check on rows + detail (iOS parity), mirroring
   // CatalogScreen. Board-scoped to this list's board; attempts (sent === false) excluded.
   const { ascents } = useEnsureAscentsLoaded()

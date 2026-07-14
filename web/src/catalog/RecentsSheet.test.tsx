@@ -78,7 +78,7 @@ describe('RecentsSheet', () => {
     fireEvent.click(screen.getByRole('button', { name: /recently viewed/i }))
     await screen.findByText('Alpha')
     expect(container.ownerDocument.querySelector('.catalog-board')).not.toBeNull()
-    act(() => toggleShowPreviews())
+    act(() => toggleShowPreviews('catalog'))
     expect(container.ownerDocument.querySelector('.catalog-board')).toBeNull()
   })
 
