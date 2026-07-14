@@ -21,8 +21,8 @@ vi.mock('../auth/AuthProvider', () => ({ useAuth: () => ({ status: authStatus.va
 vi.mock('../auth/SignInDialog', () => ({
   SignInDialog: ({ open }: { open: boolean }) => (open ? <div data-testid="signin" /> : null),
 }))
-vi.mock('./BetaSubmitDrawer', () => ({
-  BetaSubmitDrawer: ({ open }: { open: boolean }) => (open ? <div data-testid="submit-drawer" /> : null),
+vi.mock('./BetaSubmitDialog', () => ({
+  BetaSubmitDialog: ({ open }: { open: boolean }) => (open ? <div data-testid="submit-dialog" /> : null),
 }))
 
 import { BetaVideos } from './BetaVideos'
@@ -64,11 +64,19 @@ describe('BetaVideos display states', () => {
 })
 
 describe('BetaVideos pending-review note (#2)', () => {
-  it('shows the note for a fresh pending mark', () => {
+  it('shows a pending card for a fresh pending mark', () => {
     localStorage.setItem('beta-pending:p', JSON.stringify({ videoId: 'x', ts: Date.now() }))
     entry = { status: 'ready', videos: [], error: null }
     render(<BetaVideos sourceCatalogId="p" />)
     expect(screen.getByText(/pending review/i)).toBeTruthy()
+  })
+
+  it('renders the pending card alongside existing approved videos', () => {
+    localStorage.setItem('beta-pending:p', JSON.stringify({ videoId: 'x', ts: Date.now() }))
+    entry = { status: 'ready', videos: [vid('a')], error: null }
+    render(<BetaVideos sourceCatalogId="p" />)
+    expect(screen.getByText(/pending review/i)).toBeTruthy() // the pending card
+    expect(screen.getByLabelText(/Beta by Chan a/)).toBeTruthy() // the approved card
   })
 
   it('hides (and clears) an expired mark', () => {
@@ -95,20 +103,20 @@ describe('BetaVideos submit gate + resume (#7)', () => {
     render(<BetaVideos sourceCatalogId="p" />)
     fireEvent.click(screen.getByRole('button', { name: /add a beta/i }))
     expect(screen.getByTestId('signin')).toBeTruthy()
-    expect(screen.queryByTestId('submit-drawer')).toBeNull()
+    expect(screen.queryByTestId('submit-dialog')).toBeNull()
   })
 
   it('reopens the submit drawer once sign-in lands (resume)', () => {
     entry = { status: 'ready', videos: [], error: null }
     const { rerender } = render(<BetaVideos sourceCatalogId="p" />)
     fireEvent.click(screen.getByRole('button', { name: /add a beta/i }))
-    expect(screen.queryByTestId('submit-drawer')).toBeNull()
+    expect(screen.queryByTestId('submit-dialog')).toBeNull()
     // Session lands: the resume effect should auto-open the drawer.
     act(() => {
       authStatus.value = 'signedInWithProfile'
     })
     rerender(<BetaVideos sourceCatalogId="p" />)
-    expect(screen.getByTestId('submit-drawer')).toBeTruthy()
+    expect(screen.getByTestId('submit-dialog')).toBeTruthy()
   })
 
   it('signed-in tap opens the drawer directly', () => {
@@ -116,6 +124,6 @@ describe('BetaVideos submit gate + resume (#7)', () => {
     entry = { status: 'ready', videos: [], error: null }
     render(<BetaVideos sourceCatalogId="p" />)
     fireEvent.click(screen.getByRole('button', { name: /add a beta/i }))
-    expect(screen.getByTestId('submit-drawer')).toBeTruthy()
+    expect(screen.getByTestId('submit-dialog')).toBeTruthy()
   })
 })

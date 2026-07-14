@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Play, Plus } from 'lucide-react'
+import { Clock, Play, Plus } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '../auth/AuthProvider'
@@ -7,7 +7,7 @@ import { SignInDialog } from '../auth/SignInDialog'
 import { useBetaVideos, refetchBeta } from './betaStore'
 import type { BetaVideo } from './betaTypes'
 import { BetaPlayerSheet } from './BetaPlayerSheet'
-import { BetaSubmitDrawer } from './BetaSubmitDrawer'
+import { BetaSubmitDialog } from './BetaSubmitDialog'
 
 // A submitted beta lands `pending` (invisible until an owner approves), so the only in-app signal
 // is a local note. It self-expires after ~7 days — rejection is silent (the row is soft-deleted
@@ -102,12 +102,31 @@ function BetaCard({ video, onOpen }: { video: BetaVideo; onOpen: (v: BetaVideo) 
   )
 }
 
+// A placeholder card in the strip for the user's own not-yet-approved submission — sits alongside
+// the real beta cards until it's approved (then it becomes a real BetaCard and this disappears) or
+// the local mark self-expires (~7 days). Same footprint as BetaCard so the strip stays even.
+function PendingCard() {
+  return (
+    <div
+      role="note"
+      aria-label="Your beta is pending review"
+      className="flex aspect-[9/16] w-28 shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-foreground/25 bg-muted/40 px-2 text-center"
+    >
+      <Clock className="size-6 text-muted-foreground" />
+      <span className="text-[11px] font-medium leading-tight text-muted-foreground">
+        Your beta is pending review
+      </span>
+    </div>
+  )
+}
+
 /**
  * The "Beta videos" section at the bottom of the problem drawer: a horizontal strip of
  * portrait clip cards (views-desc), tap → player sheet. Always renders, with four states —
  * loading (skeleton cards), has-videos (the strip), empty ("No beta videos yet"), and error
  * (a distinct "Try again"). Empty/error keep their own slot so a transient failure is
- * distinguishable from a genuinely video-less problem.
+ * distinguishable from a genuinely video-less problem. A user's own pending submission shows as a
+ * placeholder card in the strip (PendingCard) until it's approved or the local mark expires.
  */
 export function BetaVideos({ sourceCatalogId }: { sourceCatalogId: string }) {
   const { status, videos } = useBetaVideos(sourceCatalogId)
@@ -162,8 +181,6 @@ export function BetaVideos({ sourceCatalogId }: { sourceCatalogId: string }) {
         </Button>
       </div>
 
-      {pending && <p className="py-0.5 text-xs text-muted-foreground">Your beta is pending review.</p>}
-
       {status === 'loading' && (
         <div className="flex gap-3 overflow-hidden" aria-hidden>
           {[0, 1, 2].map((i) => (
@@ -181,12 +198,13 @@ export function BetaVideos({ sourceCatalogId }: { sourceCatalogId: string }) {
         </div>
       )}
 
-      {status === 'ready' && videos.length === 0 && (
+      {status === 'ready' && videos.length === 0 && !pending && (
         <p className="py-1 text-sm text-muted-foreground">No beta videos yet.</p>
       )}
 
-      {status === 'ready' && videos.length > 0 && (
+      {status === 'ready' && (videos.length > 0 || pending) && (
         <div className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-1">
+          {pending && <PendingCard />}
           {videos.map((v) => (
             <BetaCard key={v.id} video={v} onOpen={setActive} />
           ))}
@@ -204,7 +222,7 @@ export function BetaVideos({ sourceCatalogId }: { sourceCatalogId: string }) {
         }}
         title="Sign in to add a beta"
       />
-      <BetaSubmitDrawer
+      <BetaSubmitDialog
         open={submitOpen}
         onOpenChange={setSubmitOpen}
         sourceCatalogId={sourceCatalogId}
