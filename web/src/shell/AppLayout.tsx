@@ -27,7 +27,8 @@ import { BleBrowserBanner } from './BleBrowserBanner'
 import { InstallBanner } from './InstallBanner'
 import { FullscreenTipBanner } from './FullscreenTipBanner'
 import { SessionPill } from './SessionPill'
-import { initSessions } from '../sessions/sessionsStore'
+import { initSessions, useSessions } from '../sessions/sessionsStore'
+import { useSessionRealtime } from '../sessions/sessionRealtime'
 import { PENDING_JOIN_KEY } from '../sessions/JoinSession'
 import { useAuth } from '../auth/AuthProvider'
 import { CATALOG_SEARCH_DEFAULTS, type CatalogSearch } from '../catalog/catalogSearch'
@@ -65,6 +66,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
   useEffect(() => {
     initSessions()
   }, [])
+
+  // Keep the session's realtime channel subscribed app-wide whenever a session is active — so a
+  // co-member's send refreshes the catalog and join/leave toasts fire on ANY screen, not just the
+  // catalog. Keyed on the session id (the channel is per-session, not per-board); the board-scoped
+  // ascents projection still lives in CatalogScreen and no-ops the refetch when it isn't mounted.
+  const { activeSession } = useSessions()
+  useSessionRealtime(activeSession?.id ?? null)
 
   // Resume a pending join after sign-in (U8): an OAuth round-trip returns to `/` and drops
   // the join route, so once a session lands we bounce back to /session/join/$token. The
