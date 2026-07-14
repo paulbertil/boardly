@@ -143,6 +143,10 @@ body {
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    /* Slim, theme-tinted scrollbars — the macOS default bar is a fat white
+       gutter on our dark surfaces (most visible in bottom drawers). */
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
   }
   body {
     @apply bg-background text-foreground;

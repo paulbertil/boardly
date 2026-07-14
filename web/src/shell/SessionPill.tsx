@@ -32,40 +32,38 @@ export function SessionPill({ suppressed }: { suppressed?: boolean }) {
         </span>
       </DrawerTrigger>
       <DrawerContent>
-        <div className="mx-auto flex min-h-0 w-full max-w-[480px] flex-1 flex-col">
-          <DrawerHeader>
-            <DrawerTitle>{activeSession.name || 'Session'}</DrawerTitle>
-          </DrawerHeader>
-          <div className="max-h-[70vh] space-y-5 overflow-y-auto px-4 pt-1 pb-[calc(2rem+env(safe-area-inset-bottom))]">
-            {/* Roster — a stacked AvatarGroup; hover an avatar for the member's name. */}
-            {roster.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Loading members…</p>
-            ) : (
-              <AvatarGroup aria-label={`${count} ${count === 1 ? 'member' : 'members'}`}>
-                {roster.map((m) => (
-                  <MemberAvatar
-                    key={m.userId}
-                    initials={memberInitials(m)}
-                    avatarUrl={m.avatarUrl}
-                    isSelf={m.userId === selfId}
-                    title={m.userId === selfId ? 'You' : memberLabel(m)}
-                  />
-                ))}
-              </AvatarGroup>
-            )}
+        <DrawerHeader>
+          <DrawerTitle>{activeSession.name || 'Session'}</DrawerTitle>
+        </DrawerHeader>
+        <div className="max-h-[70vh] space-y-5 overflow-y-auto px-4 pt-1 pb-[calc(2rem+env(safe-area-inset-bottom))]">
+          {/* Roster — a stacked AvatarGroup; hover an avatar for the member's name. */}
+          {roster.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Loading members…</p>
+          ) : (
+            <AvatarGroup aria-label={`${count} ${count === 1 ? 'member' : 'members'}`}>
+              {roster.map((m) => (
+                <MemberAvatar
+                  key={m.userId}
+                  initials={memberInitials(m)}
+                  avatarUrl={m.avatarUrl}
+                  isSelf={m.userId === selfId}
+                  title={m.userId === selfId ? 'You' : memberLabel(m)}
+                />
+              ))}
+            </AvatarGroup>
+          )}
 
-            {/* Share */}
-            <ShareSession />
+          {/* Share */}
+          <ShareSession />
 
-            {/* Leave — one deliberate tap (R16) */}
-            <Button
-              variant="outline"
-              className="w-full text-destructive hover:text-destructive"
-              onClick={() => void leaveSession()}
-            >
-              Leave session
-            </Button>
-          </div>
+          {/* Leave — one deliberate tap (R16) */}
+          <Button
+            variant="outline"
+            className="w-full text-destructive hover:text-destructive"
+            onClick={() => void leaveSession()}
+          >
+            Leave session
+          </Button>
         </div>
       </DrawerContent>
     </Drawer>
