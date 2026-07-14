@@ -1,9 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+interface RosterMember {
+  userId: string
+  displayName: string | null
+  handle: string | null
+  avatarUrl: string | null
+  joinedAt: string
+}
+
 interface FakeChannel {
   name: string
   opts: { config?: { private?: boolean } }
-  cb?: (msg: { payload?: { author?: string } }) => void
+  handlers: Record<string, (msg: { payload?: { author?: string } }) => void>
   subscribed: boolean
 }
 
@@ -16,6 +24,10 @@ const h = vi.hoisted(() => ({
   removed: [] as FakeChannel[],
   setAuthCalls: [] as (string | undefined)[],
   refetchCalls: 0,
+  rosterReloads: 0,
+  joined: [] as RosterMember[],
+  selfId: 'self' as string | null,
+  toasts: [] as string[],
 }))
 
 vi.mock('./memberAscentsStore', () => ({
@@ -25,6 +37,20 @@ vi.mock('./memberAscentsStore', () => ({
   },
 }))
 
+vi.mock('./sessionsStore', () => ({
+  reloadActiveRoster: () => {
+    h.rosterReloads += 1
+    return Promise.resolve(h.joined)
+  },
+  getSessionsSnapshot: () => ({ selfId: h.selfId }),
+}))
+
+vi.mock('./sessionsTypes', () => ({
+  memberLabel: (m: RosterMember) => m.displayName ?? m.handle ?? m.userId,
+}))
+
+vi.mock('sonner', () => ({ toast: (msg: string) => h.toasts.push(msg) }))
+
 vi.mock('../supabase/client', () => ({
   get supabase() {
     if (h.nullClient) return null
@@ -33,13 +59,14 @@ vi.mock('../supabase/client', () => ({
       realtime: { setAuth: (t?: string) => h.setAuthCalls.push(t) },
       channel: (name: string, opts: FakeChannel['opts']) => {
         // One object carries both the recorded fields and the chained API, so the same
-        // reference the module stores is what removeChannel() receives.
-        const ch = { name, opts, subscribed: false } as FakeChannel & {
-          on: (t: string, f: unknown, cb: FakeChannel['cb']) => typeof ch
+        // reference the module stores is what removeChannel() receives. Handlers are keyed by
+        // broadcast event so the module can register several (ascents / member-joined / -left).
+        const ch = { name, opts, subscribed: false, handlers: {} } as FakeChannel & {
+          on: (t: string, f: { event: string }, cb: FakeChannel['handlers'][string]) => typeof ch
           subscribe: () => typeof ch
         }
-        ch.on = (_type, _filter, cb) => {
-          ch.cb = cb
+        ch.on = (_type, filter, cb) => {
+          ch.handlers[filter.event] = cb
           return ch
         }
         ch.subscribe = () => {
@@ -57,10 +84,15 @@ vi.mock('../supabase/client', () => ({
 
 import { NUDGE_DEBOUNCE_MS, activateSessionRealtime } from './sessionRealtime'
 
-/** Flush the getSession().then microtask chain that sets up the channel. */
+/** Flush the getSession().then microtask chain that sets up the channel (and async handlers). */
 async function flush(): Promise<void> {
   await Promise.resolve()
   await Promise.resolve()
+}
+
+/** Fire a broadcast for the given event on the (only) open channel. */
+function fire(event: string, payload?: { author?: string }): void {
+  h.channels[0].handlers[event]?.({ payload })
 }
 
 beforeEach(() => {
@@ -71,6 +103,10 @@ beforeEach(() => {
   h.removed = []
   h.setAuthCalls = []
   h.refetchCalls = 0
+  h.rosterReloads = 0
+  h.joined = []
+  h.selfId = 'self'
+  h.toasts = []
 })
 
 afterEach(() => {
@@ -92,7 +128,7 @@ describe('sessionRealtime', () => {
   it('debounce-refetches once on a co-member nudge', async () => {
     activateSessionRealtime('S1')
     await flush()
-    h.channels[0].cb?.({ payload: { author: 'other' } })
+    fire('ascents-changed', { author: 'other' })
     expect(h.refetchCalls).toBe(0) // debounced, not yet
     vi.advanceTimersByTime(NUDGE_DEBOUNCE_MS)
     expect(h.refetchCalls).toBe(1)
@@ -101,9 +137,9 @@ describe('sessionRealtime', () => {
   it('coalesces a burst of nudges into a single refetch', async () => {
     activateSessionRealtime('S1')
     await flush()
-    h.channels[0].cb?.({ payload: { author: 'other' } })
-    h.channels[0].cb?.({ payload: { author: 'other' } })
-    h.channels[0].cb?.({ payload: { author: 'other' } })
+    fire('ascents-changed', { author: 'other' })
+    fire('ascents-changed', { author: 'other' })
+    fire('ascents-changed', { author: 'other' })
     vi.advanceTimersByTime(NUDGE_DEBOUNCE_MS)
     expect(h.refetchCalls).toBe(1)
   })
@@ -111,7 +147,7 @@ describe('sessionRealtime', () => {
   it('skips our own send (self author) — no refetch', async () => {
     activateSessionRealtime('S1')
     await flush()
-    h.channels[0].cb?.({ payload: { author: 'self' } })
+    fire('ascents-changed', { author: 'self' })
     vi.advanceTimersByTime(NUDGE_DEBOUNCE_MS)
     expect(h.refetchCalls).toBe(0)
   })
@@ -166,8 +202,38 @@ describe('sessionRealtime', () => {
     h.session = null // no session → selfId stays null
     activateSessionRealtime('S1')
     await flush()
-    h.channels[0].cb?.({ payload: { author: 'other' } })
+    fire('ascents-changed', { author: 'other' })
     vi.advanceTimersByTime(NUDGE_DEBOUNCE_MS)
     expect(h.refetchCalls).toBe(1)
+  })
+
+  it('member-joined reloads the roster and toasts the joiner by name', async () => {
+    h.joined = [{ userId: 'other', displayName: 'Sofia', handle: null, avatarUrl: null, joinedAt: '' }]
+    activateSessionRealtime('S1')
+    await flush()
+    fire('member-joined')
+    await flush()
+    expect(h.rosterReloads).toBe(1)
+    expect(h.toasts).toEqual(['Sofia joined the session'])
+  })
+
+  it('member-joined does not toast for our own join (still reloads the roster)', async () => {
+    h.joined = [{ userId: 'self', displayName: 'Me', handle: null, avatarUrl: null, joinedAt: '' }]
+    activateSessionRealtime('S1')
+    await flush()
+    fire('member-joined')
+    await flush()
+    expect(h.rosterReloads).toBe(1)
+    expect(h.toasts).toEqual([])
+  })
+
+  it('member-left reloads the roster without toasting', async () => {
+    h.joined = [] // nobody new on a leave
+    activateSessionRealtime('S1')
+    await flush()
+    fire('member-left')
+    await flush()
+    expect(h.rosterReloads).toBe(1)
+    expect(h.toasts).toEqual([])
   })
 })

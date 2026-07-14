@@ -95,4 +95,14 @@ run_case "$HERE/0011_session_realtime_rls.sql" \
   "$HERE/stub_realtime.sql" \
   "$HERE/../0011_session_realtime.sql"
 
+# 0012: session membership realtime — the session_members join/leave trigger that broadcasts
+# member-joined / member-left on the session:<id> channel. Same chain as 0011 (needs the
+# realtime stub); reuses 0011's receive policy, so 0011 is in the chain too.
+run_case "$HERE/0012_session_membership_realtime_rls.sql" \
+  "$HERE/../0002_logbook_sync.sql" \
+  "$HERE/../0007_collaboration_sessions.sql" \
+  "$HERE/stub_realtime.sql" \
+  "$HERE/../0011_session_realtime.sql" \
+  "$HERE/../0012_session_membership_realtime.sql"
+
 echo "✅ ALL RLS CASES PASSED"

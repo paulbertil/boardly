@@ -17,14 +17,19 @@
 
 import { useEffect } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
+import { toast } from 'sonner'
 import { supabase } from '../supabase/client'
 import { refreshMemberAscents } from './memberAscentsStore'
+import { getSessionsSnapshot, reloadActiveRoster } from './sessionsStore'
+import { memberLabel } from './sessionsTypes'
 
 /** Coalesce a burst of nudges into a single refetch. */
 export const NUDGE_DEBOUNCE_MS = 600
 
-/** Broadcast event name — must match the trigger's realtime.send(... event ...) in 0011. */
+/** Broadcast event names — must match the triggers' realtime.send(... event ...) in 0011/0012. */
 const NUDGE_EVENT = 'ascents-changed'
+const MEMBER_JOINED_EVENT = 'member-joined'
+const MEMBER_LEFT_EVENT = 'member-left'
 
 interface NudgePayload {
   author?: string
@@ -52,6 +57,20 @@ function onNudge(author: string | undefined): void {
   // already updated locally. Unknown author (selfId not yet resolved) → refetch to be safe.
   if (author && selfId && author === selfId) return
   scheduleRefetch()
+}
+
+/**
+ * A member joined or left: reload the roster (live avatars in SessionBar) and, on a join, toast
+ * each newly-added member by name — skipping ourselves. member-left just reloads (avatars shrink;
+ * no toast). Best-effort — a failed reload leaves the roster on its last-good state.
+ */
+async function onMembershipChange(event: string): Promise<void> {
+  const joined = await reloadActiveRoster()
+  if (event !== MEMBER_JOINED_EVENT) return
+  const self = getSessionsSnapshot().selfId
+  for (const m of joined) {
+    if (m.userId !== self) toast(`${memberLabel(m)} joined the session`)
+  }
 }
 
 function teardown(): void {
@@ -91,6 +110,14 @@ export function activateSessionRealtime(sessionId: string | null): void {
       ch.on('broadcast', { event: NUDGE_EVENT }, (msg: { payload?: NudgePayload }) => {
         if (myToken !== activationToken) return // a late message after a fast switch
         onNudge(msg.payload?.author)
+      })
+      ch.on('broadcast', { event: MEMBER_JOINED_EVENT }, () => {
+        if (myToken !== activationToken) return
+        void onMembershipChange(MEMBER_JOINED_EVENT)
+      })
+      ch.on('broadcast', { event: MEMBER_LEFT_EVENT }, () => {
+        if (myToken !== activationToken) return
+        void onMembershipChange(MEMBER_LEFT_EVENT)
       })
       ch.subscribe()
       channel = ch
