@@ -36,12 +36,6 @@ export function MemberAvatar({
       {/* Self marker is an INSET ring on the fallback — an outward ring/offset gets clipped by
           the surrounding overflow-y-auto scroll containers (which clip both axes). */}
       <AvatarFallback
-        // When a photo IS set, hold the initials fallback back briefly: Base UI resets the image
-        // to a loading state on re-render/remount (e.g. a live roster reload when a member joins
-        // or leaves), which would otherwise flash a member's initials over their cached photo.
-        // A cached image reloads well within the window, so the flash never shows. Members with
-        // no photo (avatarUrl null) keep an instant fallback — no delay.
-        delay={avatarUrl ? 600 : undefined}
         className={cn(
           'bg-primary/15 font-semibold text-foreground',
           isSelf && 'ring-2 ring-inset ring-primary',
