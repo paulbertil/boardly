@@ -70,7 +70,7 @@ export function CatalogList({
   highlightHolds,
   onSelect,
 }: CatalogListProps) {
-  const showThumbnails = useShowPreviews()
+  const showThumbnails = useShowPreviews('catalog')
   const [visibleCount, setVisibleCount] = useState(PAGE)
   const sentinelRef = useRef<HTMLDivElement>(null)
 
@@ -144,7 +144,7 @@ export function CatalogList({
         <span>{displayed.length} problems</span>
         <button
           type="button"
-          onClick={toggleShowPreviews}
+          onClick={() => toggleShowPreviews('catalog')}
           aria-pressed={showThumbnails}
           aria-label={showThumbnails ? 'Hide climb previews' : 'Show climb previews'}
           title={showThumbnails ? 'Hide climb previews' : 'Show climb previews'}

@@ -16,6 +16,8 @@ vi.mock('@tanstack/react-router', () => ({
 
 beforeEach(() => {
   localStorage.clear()
+  // Reset the previews snapshot (survives localStorage.clear()).
+  window.dispatchEvent(new StorageEvent('storage'))
   document.documentElement.classList.remove('dark')
   // Deterministic start — jsdom has no matchMedia, so System resolves to light.
   setTheme('system')
@@ -35,6 +37,23 @@ describe('SettingsScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Dark' }))
     expect(document.documentElement.classList.contains('dark')).toBe(true)
     expect(localStorage.getItem('theme')).toBe('dark')
+  })
+
+  it('renders a preview switch per surface, all on by default', () => {
+    render(<SettingsScreen />)
+    for (const name of ['catalog', 'logbook', 'lists', 'last opened bar']) {
+      const toggle = screen.getByRole('switch', { name: `Show climb previews in ${name}` })
+      expect(toggle).toBeChecked()
+    }
+  })
+
+  it('toggles one surface without touching the others', () => {
+    render(<SettingsScreen />)
+    fireEvent.click(screen.getByRole('switch', { name: /previews in logbook/i }))
+    expect(screen.getByRole('switch', { name: /previews in logbook/i })).not.toBeChecked()
+    expect(localStorage.getItem('showClimbPreviews.logbook')).toBe('false')
+    expect(screen.getByRole('switch', { name: /previews in catalog/i })).toBeChecked()
+    expect(localStorage.getItem('showClimbPreviews.catalog')).toBeNull()
   })
 
   it('links to the MoonBoard import flow', () => {

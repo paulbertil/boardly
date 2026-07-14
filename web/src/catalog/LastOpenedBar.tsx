@@ -44,7 +44,7 @@ export function LastOpenedBar({
 }: LastOpenedBarProps) {
   const shownId = useLastOpened(board.layoutId, angle)
   const { favoriteIds, toggleFavorite } = useFavorites()
-  const showThumbnail = useShowPreviews()
+  const showThumbnail = useShowPreviews('lastOpened')
 
   // Resolve against the full slab so a last-opened climb the filters now exclude still
   // renders (it was opened from this slab, so it's present). Memoized so the O(n) scan

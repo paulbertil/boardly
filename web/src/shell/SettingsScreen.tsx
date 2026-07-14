@@ -1,11 +1,17 @@
 // Settings — global, non-board-scoped app configuration. Reached from the bottom
-// nav's Settings tab (`/settings`). Today it holds only Appearance (theme); it's
-// laid out as labeled Card rows so more settings can slot in later.
+// nav's Settings tab (`/settings`). Holds Appearance (theme) and per-surface climb
+// preview toggles; laid out as labeled Card rows so more settings can slot in later.
 
 import { ChevronRight, Download, Monitor, Moon, Sun } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
 import { Card, CardContent } from '@/components/ui/card'
+import { Switch } from '@/components/ui/switch'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import {
+  setShowPreviews,
+  useShowPreviews,
+  type PreviewSurface,
+} from '../catalog/previewsStore'
 import { setTheme, useTheme, type Theme } from './themeStore'
 
 const THEME_OPTIONS: { value: Theme; label: string; icon: typeof Sun }[] = [
@@ -13,6 +19,34 @@ const THEME_OPTIONS: { value: Theme; label: string; icon: typeof Sun }[] = [
   { value: 'dark', label: 'Dark', icon: Moon },
   { value: 'system', label: 'System', icon: Monitor },
 ]
+
+const PREVIEW_OPTIONS: { surface: PreviewSurface; label: string; detail: string }[] = [
+  { surface: 'catalog', label: 'Catalog', detail: 'Rows in the problem catalog and recents.' },
+  { surface: 'logbook', label: 'Logbook', detail: 'Rows in your logbook sessions.' },
+  { surface: 'lists', label: 'Lists', detail: 'Rows inside a list.' },
+  {
+    surface: 'lastOpened',
+    label: 'Last opened bar',
+    detail: 'The latest-problem bar above the bottom navigation.',
+  },
+]
+
+function PreviewToggleRow({ surface, label, detail }: (typeof PREVIEW_OPTIONS)[number]) {
+  const on = useShowPreviews(surface)
+  return (
+    <div className="flex items-center gap-3">
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium">{label}</div>
+        <div className="mt-0.5 text-xs text-muted-foreground">{detail}</div>
+      </div>
+      <Switch
+        aria-label={`Show climb previews in ${label.toLowerCase()}`}
+        checked={on}
+        onCheckedChange={(checked) => setShowPreviews(surface, checked)}
+      />
+    </div>
+  )
+}
 
 export function SettingsScreen() {
   const theme = useTheme()
@@ -49,6 +83,20 @@ export function SettingsScreen() {
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="space-y-3">
+          <div>
+            <h2 className="text-sm font-medium">Climb previews</h2>
+            <p className="text-sm text-muted-foreground">
+              Show a board thumbnail of each problem, per screen.
+            </p>
+          </div>
+          {PREVIEW_OPTIONS.map((option) => (
+            <PreviewToggleRow key={option.surface} {...option} />
+          ))}
         </CardContent>
       </Card>
 

@@ -1,35 +1,52 @@
-// Device-local "show climb previews" toggle for the catalog list. Mirrors iOS's
-// `@AppStorage("showClimbPreviews")` (default on): when set, each list row draws a
-// board thumbnail of the problem. Persisted to localStorage; exposed reactively so
-// the list and the toggle button update together.
+// Device-local "show climb previews" toggles, one per surface: the catalog list
+// (which also governs the recents sheet), the logbook, list detail screens, and the
+// last-opened bar above the bottom nav. Each surface persists to its own localStorage
+// key and defaults ON; all are exposed reactively so Settings, the catalog's inline
+// toggle button, and the rows they control stay in sync.
 
 import { useSyncExternalStore } from 'react'
 
-const KEY = 'showClimbPreviews'
+export type PreviewSurface = 'catalog' | 'logbook' | 'lists' | 'lastOpened'
 
-function read(): boolean {
+export const PREVIEW_SURFACES: PreviewSurface[] = ['catalog', 'logbook', 'lists', 'lastOpened']
+
+function keyFor(surface: PreviewSurface): string {
+  return `showClimbPreviews.${surface}`
+}
+
+function read(surface: PreviewSurface): boolean {
   try {
-    const raw = localStorage.getItem(KEY)
-    // Default ON to match iOS — only an explicit "false" hides previews.
+    const raw = localStorage.getItem(keyFor(surface))
+    // Default ON — only an explicit "false" hides previews.
     return raw === null ? true : raw === 'true'
   } catch {
     return true
   }
 }
 
-function write(on: boolean): void {
+function write(surface: PreviewSurface, on: boolean): void {
   try {
-    localStorage.setItem(KEY, on ? 'true' : 'false')
+    localStorage.setItem(keyFor(surface), on ? 'true' : 'false')
   } catch {
     // Best-effort.
   }
 }
 
 const listeners = new Set<() => void>()
-let snapshot = read()
+
+function readAll(): Record<PreviewSurface, boolean> {
+  return {
+    catalog: read('catalog'),
+    logbook: read('logbook'),
+    lists: read('lists'),
+    lastOpened: read('lastOpened'),
+  }
+}
+
+let snapshot = readAll()
 
 function emit(): void {
-  snapshot = read()
+  snapshot = readAll()
   for (const l of listeners) l()
 }
 
@@ -37,13 +54,17 @@ if (typeof window !== 'undefined') {
   window.addEventListener('storage', () => emit())
 }
 
-export function getShowPreviews(): boolean {
-  return snapshot
+export function getShowPreviews(surface: PreviewSurface): boolean {
+  return snapshot[surface]
 }
 
-export function toggleShowPreviews(): void {
-  write(!snapshot)
+export function setShowPreviews(surface: PreviewSurface, on: boolean): void {
+  write(surface, on)
   emit()
+}
+
+export function toggleShowPreviews(surface: PreviewSurface): void {
+  setShowPreviews(surface, !snapshot[surface])
 }
 
 function subscribe(listener: () => void): () => void {
@@ -52,6 +73,6 @@ function subscribe(listener: () => void): () => void {
 }
 
 /** Reactive previews toggle for components. */
-export function useShowPreviews(): boolean {
-  return useSyncExternalStore(subscribe, getShowPreviews)
+export function useShowPreviews(surface: PreviewSurface): boolean {
+  return useSyncExternalStore(subscribe, () => snapshot[surface])
 }

@@ -127,7 +127,7 @@ catalog shows — browser back/forward works and every meaningful view is deep-l
                            board's catalog (URL built from the localStorage seed)
 /boards                  → MyBoards
 /logbook                 → LogbookScreen
-/settings                → SettingsScreen (global; appearance/theme)
+/settings                → SettingsScreen (global; appearance/theme, climb previews)
 /board/$layoutId/catalog → CatalogScreen  (search params below)
 ```
 
@@ -135,6 +135,13 @@ The bottom bar (`web/src/shell/Navigation.tsx`) is four tabs: three home tabs cl
 (`Boards`, `Logbook`, `Settings`) and `Search` pinned rightmost — `[Boards] [Logbook] [Settings]
 … [Search]`. On the catalog the bar collapses to just the **origin** (the last home screen
 visited, now including Settings) plus the live search field: e.g. `[Settings] [search…]`.
+
+**Climb previews:** `web/src/catalog/previewsStore.ts` holds four independent per-surface
+toggles (`showClimbPreviews.catalog|logbook|lists|lastOpened` localStorage keys, all default on;
+the legacy global `showClimbPreviews` key is ignored). Settings renders a switch per surface;
+the catalog list header keeps its inline shortcut button, which flips only the `catalog` toggle.
+The recents sheet follows `catalog`; `lastOpened` hides just the thumbnail inside the
+last-opened bar, not the bar itself.
 
 **Appearance / theme:** `web/src/shell/themeStore.ts` is a module store (mirrors `previewsStore`)
 under the `theme` localStorage key (`light` | `dark` | `system`, default `system`, matching iOS's
