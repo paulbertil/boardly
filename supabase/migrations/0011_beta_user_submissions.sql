@@ -150,7 +150,14 @@ begin
     begin
         perform net.http_post(
             url     := _url,
+            -- Body carries a human-readable message under BOTH `content` (Discord) and `text`
+            -- (Slack) so the same payload works for either incoming webhook, plus the structured
+            -- fields for a generic relay (Make/Zapier/n8n) that forwards elsewhere.
             body    := jsonb_build_object(
+                'content',           format('🎥 New beta submitted — https://youtu.be/%s (problem %s)',
+                                            new.video_id, new.source_catalog_id),
+                'text',              format('🎥 New beta submitted — https://youtu.be/%s (problem %s)',
+                                            new.video_id, new.source_catalog_id),
                 'event',             'beta_submission',
                 'source_catalog_id', new.source_catalog_id,
                 'video_id',          new.video_id,
