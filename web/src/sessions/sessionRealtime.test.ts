@@ -13,6 +13,7 @@ interface FakeChannel {
   opts: { config?: { private?: boolean } }
   handlers: Record<string, (msg: { payload?: { author?: string; user_id?: string } }) => void>
   subscribed: boolean
+  statusCb: ((status: string) => void) | null
 }
 
 const h = vi.hoisted(() => ({
@@ -34,6 +35,7 @@ const h = vi.hoisted(() => ({
   endedLocally: false,
   selfId: 'self' as string | null,
   toasts: [] as string[],
+  queueRefreshCalls: 0,
 }))
 
 vi.mock('./memberAscentsStore', () => ({
@@ -64,6 +66,12 @@ vi.mock('./sessionsTypes', () => ({
   memberLabel: (m: RosterMember) => m.displayName ?? m.handle ?? m.userId,
 }))
 
+vi.mock('./queueStore', () => ({
+  refreshQueue: () => {
+    h.queueRefreshCalls += 1
+  },
+}))
+
 vi.mock('sonner', () => ({ toast: (msg: string) => h.toasts.push(msg) }))
 
 vi.mock('../supabase/client', () => ({
@@ -76,16 +84,21 @@ vi.mock('../supabase/client', () => ({
         // One object carries both the recorded fields and the chained API, so the same
         // reference the module stores is what removeChannel() receives. Handlers are keyed by
         // broadcast event so the module can register several (ascents / member-joined / -left).
-        const ch = { name, opts, subscribed: false, handlers: {} } as FakeChannel & {
+        const ch = { name, opts, subscribed: false, statusCb: null, handlers: {} } as FakeChannel & {
           on: (t: string, f: { event: string }, cb: FakeChannel['handlers'][string]) => typeof ch
-          subscribe: () => typeof ch
+          subscribe: (cb?: (status: string) => void) => typeof ch
         }
         ch.on = (_type, filter, cb) => {
           ch.handlers[filter.event] = cb
           return ch
         }
-        ch.subscribe = () => {
+        // Mirror supabase's subscribe(status => …): store the status callback and fire the initial
+        // SUBSCRIBED once (as the real client does on a successful join). Tests re-invoke statusCb
+        // to simulate a reconnect (a second SUBSCRIBED after a drop).
+        ch.subscribe = (cb) => {
           ch.subscribed = true
+          ch.statusCb = cb ?? null
+          cb?.('SUBSCRIBED')
           return ch
         }
         h.channels.push(ch)
@@ -110,6 +123,11 @@ function fire(event: string, payload?: { author?: string; user_id?: string }): v
   h.channels[0].handlers[event]?.({ payload })
 }
 
+/** Re-invoke the subscribe status callback on the (only) open channel — simulates a reconnect. */
+function fireStatus(status: string): void {
+  h.channels[0].statusCb?.(status)
+}
+
 beforeEach(() => {
   vi.useFakeTimers()
   h.nullClient = false
@@ -128,6 +146,7 @@ beforeEach(() => {
   h.endedLocally = false
   h.selfId = 'self'
   h.toasts = []
+  h.queueRefreshCalls = 0
 })
 
 afterEach(() => {
@@ -319,5 +338,23 @@ describe('sessionRealtime', () => {
     await flush()
     expect(h.rosterReloads).toBe(1)
     expect(h.toasts).toEqual([])
+  })
+
+  it('refetches the queue on a queue-changed nudge', async () => {
+    activateSessionRealtime('S1')
+    await flush()
+    fire('queue-changed')
+    // refreshQueue is the store's own (internally-debounced) refetch; the module calls it directly
+    // with no debounce of its own, so the nudge invokes it right away.
+    expect(h.queueRefreshCalls).toBe(1)
+  })
+
+  it('reconciles the queue on reconnect (a second SUBSCRIBED after a drop)', async () => {
+    activateSessionRealtime('S1')
+    await flush()
+    // The initial SUBSCRIBED (fired by subscribe() on join) is not a reconnect — no refetch yet.
+    expect(h.queueRefreshCalls).toBe(0)
+    fireStatus('SUBSCRIBED') // socket recovered — a queue-changed nudge may have been missed (KTD5)
+    expect(h.queueRefreshCalls).toBe(1)
   })
 })
