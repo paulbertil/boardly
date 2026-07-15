@@ -1,8 +1,10 @@
-// In-app QR scanner for joining a session (U3). A bottom drawer opens the camera, decodes a
-// session QR, and navigates to the existing /session/join/$token route — the scanner owns only
-// camera states (KTD-4); sign-in, consent, and the join RPC stay in JoinSession.
+// Scanner-first "filter with friends" launcher (U3). A centered dialog that opens straight to the
+// camera: a session QR in frame auto-joins via the existing /session/join/$token route — the
+// scanner owns only camera states (KTD-4); sign-in, consent, and the join RPC stay in JoinSession.
+// Hosting is the demoted path: when `onStart` is supplied, an "or" divider + "Start your own
+// session" button sit below the viewfinder.
 //
-// The heavy decoder (@yudiel/react-qr-scanner + ~433 kB WASM) loads only when the drawer opens,
+// The heavy decoder (@yudiel/react-qr-scanner + ~433 kB WASM) loads only when the dialog opens,
 // via a manual dynamic import that awaits both the chunk and the retryable ensureDecoder() WASM
 // prep in one place and can retry per attempt. React.lazy is a poor fit here: it memoizes a
 // rejected import, so its retry edge can't recover an offline first open (KTD-5). Any load failure
@@ -10,19 +12,18 @@
 
 import { useCallback, useEffect, useRef, useState, type ComponentType } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { Camera, Loader2, ScanQrCode } from 'lucide-react'
+import { Camera, Loader2, Plus, ScanQrCode } from 'lucide-react'
 import type { IScannerProps } from '@yudiel/react-qr-scanner'
 import { parseJoinUrl } from './joinUrl'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
-  Drawer,
-  DrawerContent,
-  DrawerDescription,
-  DrawerHeader,
-  DrawerTitle,
-} from '@/components/ui/drawer'
-import { cn } from '@/lib/utils'
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 type ScannerComponent = ComponentType<IScannerProps>
 // 'fallback' covers both a real camera failure and the user choosing to type the link instead.
@@ -88,29 +89,28 @@ function ScannerStage({
   )
 }
 
-function Hint({ text, tone }: { text: string | null; tone: 'muted' | 'error' }) {
-  return (
-    <p
-      aria-live="polite"
-      className={cn(
-        'min-h-5 text-center text-sm',
-        tone === 'error' ? 'text-destructive' : 'text-muted-foreground',
-      )}
-    >
-      {text}
-    </p>
-  )
-}
-
-/** Controlled scanner drawer. The visible branch is chosen by `phase` (not `open`) so the drawer's
- *  close animation never flashes the fallback card; only the live camera (`ScannerStage`) is gated
- *  on `open`, so closing tears the stream down (R9). */
+/**
+ * Scanner-first session launcher. Camera-only by default; pass `onStart` (+ `starting`/`canStart`)
+ * to surface the "Start your own session" host path below the viewfinder.
+ *
+ * The visible branch is chosen by `phase` (not `open`) so the dialog's close animation never
+ * flashes the fallback card; only the live camera (`ScannerStage`) is gated on `open`, so closing
+ * tears the stream down (R9).
+ */
 export function ScanToJoin({
   open,
   onOpenChange,
+  onStart,
+  starting = false,
+  canStart = false,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** When provided, renders the "Start your own session" host action below the scanner. */
+  onStart?: () => void
+  starting?: boolean
+  /** Whether the host action is enabled (signed in). Ignored when `onStart` is absent. */
+  canStart?: boolean
 }) {
   const navigate = useNavigate()
   const [phase, setPhase] = useState<Phase>('scanning')
@@ -134,9 +134,8 @@ export function ScanToJoin({
     [navigate, onOpenChange],
   )
 
-  // Reset when the drawer closes, so the next open always starts clean (and never paints a stale
-  // fallback view for a frame). Runs on close, not open, so the reset is invisible behind the
-  // closing animation rather than a post-open flash.
+  // Reset when the dialog closes, so the next open always starts on the camera (scanner-first) and
+  // never paints a stale fallback frame. Runs on close so the reset hides behind the animation.
   useEffect(() => {
     if (!open) {
       setPhase('scanning')
@@ -194,79 +193,103 @@ export function ScanToJoin({
   }, [pasteValue, goToJoin, flashHint])
 
   return (
-    <Drawer open={open} onOpenChange={onOpenChange} showSwipeHandle>
-      <DrawerContent>
-        <DrawerHeader>
-          <DrawerTitle>Scan to join</DrawerTitle>
-          <DrawerDescription>
-            Point your camera at a friend’s session QR code.
-          </DrawerDescription>
-        </DrawerHeader>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="gap-5">
+        <DialogHeader className="text-left">
+          <DialogTitle>Filter with friends</DialogTitle>
+          <DialogDescription>
+            {phase === 'scanning'
+              ? 'Point at a friend’s session QR code to join.'
+              : 'Camera unavailable — paste the link a friend sent you.'}
+          </DialogDescription>
+        </DialogHeader>
 
-        <div className="flex flex-col gap-3 px-4 pb-[calc(2rem+env(safe-area-inset-bottom))]">
-          {phase === 'scanning' ? (
-            <>
-              {open ? (
-                <ScannerStage
-                  attempt={attempt}
-                  paused={paused}
-                  onDecode={onDecode}
-                  onError={enterFallback}
-                />
-              ) : (
-                // Closing: keep the scanner's footprint while the drawer animates out, without a
-                // live camera.
-                <div className="aspect-square w-full rounded-lg bg-muted" />
-              )}
-              <Hint text={hint} tone="muted" />
-              <Button variant="ghost" size="sm" onClick={enterFallback}>
-                Enter the link instead
-              </Button>
-            </>
-          ) : (
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-2 rounded-md border border-border bg-muted p-3 text-sm text-muted-foreground">
-                <Camera className="size-4 shrink-0" />
-                <span>
-                  Camera unavailable. Ask your friend to send the link, then paste it here.
-                </span>
-              </div>
-              <Input
-                value={pasteValue}
-                onChange={(e) => {
-                  setPasteValue(e.target.value)
-                  if (hint) setHint(null)
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') submitPaste()
-                }}
-                placeholder="Paste session link"
-                aria-label="Session link"
-                autoCapitalize="off"
-                autoCorrect="off"
-                spellCheck={false}
+        {phase === 'scanning' ? (
+          <div className="flex flex-col gap-3">
+            {open ? (
+              <ScannerStage
+                attempt={attempt}
+                paused={paused}
+                onDecode={onDecode}
+                onError={enterFallback}
               />
-              <Hint text={hint} tone="error" />
-              <div className="flex gap-2">
-                <Button variant="outline" className="flex-1" onClick={retry}>
-                  <ScanQrCode className="size-4" />
-                  Try camera
-                </Button>
-                <Button className="flex-1" disabled={!pasteValue.trim()} onClick={submitPaste}>
-                  Join
-                </Button>
-              </div>
+            ) : (
+              // Closing: keep the scanner's footprint while the dialog animates out, no live camera.
+              <div className="aspect-square w-full rounded-lg bg-muted" />
+            )}
+            <p aria-live="polite" className="text-center text-sm text-muted-foreground">
+              {hint ?? 'Scanning…'}
+            </p>
+            <Button variant="ghost" size="sm" onClick={enterFallback}>
+              Enter the link instead
+            </Button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2 rounded-md border border-border bg-muted p-3 text-sm text-muted-foreground">
+              <Camera className="size-4 shrink-0" />
+              <span>Ask your friend to send the link, then paste it here.</span>
             </div>
-          )}
-        </div>
-      </DrawerContent>
-    </Drawer>
+            <Input
+              value={pasteValue}
+              onChange={(e) => {
+                setPasteValue(e.target.value)
+                if (hint) setHint(null)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') submitPaste()
+              }}
+              placeholder="Paste session link"
+              aria-label="Session link"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+            />
+            {hint && <p className="text-center text-sm text-destructive">{hint}</p>}
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={retry}>
+                <ScanQrCode className="size-4" />
+                Try camera
+              </Button>
+              <Button className="flex-1" disabled={!pasteValue.trim()} onClick={submitPaste}>
+                Join
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {onStart && (
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <span className="h-px flex-1 bg-border" />
+              <span className="text-xs uppercase tracking-wide text-muted-foreground">or</span>
+              <span className="h-px flex-1 bg-border" />
+            </div>
+            <Button
+              variant="outline"
+              className="w-full"
+              disabled={!canStart || starting}
+              title={canStart ? undefined : 'Sign in to start a session'}
+              onClick={onStart}
+            >
+              {starting ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+              {starting ? 'Creating session…' : 'Start your own session'}
+            </Button>
+            {!canStart && (
+              <p className="text-center text-xs text-muted-foreground">
+                Sign in to start — joining a friend’s doesn’t need an account.
+              </p>
+            )}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }
 
-/** Reusable trigger: a button (styled by the caller) that owns the drawer's open state. Both entry
- *  points — StartBar and the boards overview — render this. Spreads through `Button`'s props so
- *  callers can pass `disabled`, `title`, `size`, etc. */
+/** Reusable trigger for a camera-only join (no host action) — used by the boards overview, which
+ *  has no board context to start a session in. Owns the dialog's open state. Spreads through
+ *  `Button`'s props so callers can style it. */
 export function ScanToJoinButton({
   variant = 'outline',
   children,

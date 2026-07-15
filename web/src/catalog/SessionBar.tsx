@@ -4,7 +4,7 @@
 // DIFFERENT board is active it renders nothing (the global pill surfaces that one).
 
 import { useCallback, useRef, useState } from 'react'
-import { MoreHorizontal, RefreshCw, ScanQrCode, Share2, Users, X } from 'lucide-react'
+import { MoreHorizontal, RefreshCw, Share2, Users, X } from 'lucide-react'
 import type { CatalogBoardDef } from '../board/boards'
 import { boardShortLabel } from '../lists/listsTypes'
 import { useAuth } from '../auth/AuthProvider'
@@ -21,7 +21,7 @@ import { refreshMemberAscents } from '../sessions/memberAscentsStore'
 import { defaultSessionName, MAX_SESSION_NAME, memberInitials, memberLabel } from '../sessions/sessionsTypes'
 import { MemberAvatar } from '../sessions/MemberAvatar'
 import { ShareSession } from '../sessions/ShareSession'
-import { ScanToJoinButton } from '../sessions/ScanToJoin'
+import { ScanToJoin } from '../sessions/ScanToJoin'
 import { AvatarGroup, AvatarGroupCount } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -67,6 +67,9 @@ function StartBar({
 }) {
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // The single "Start or join" button opens the scanner-first launcher: it opens on the camera to
+  // join, with "Start your own session" as the demoted host path inside the same dialog.
+  const [open, setOpen] = useState(false)
 
   const start = useCallback(async () => {
     if (starting) return // guard double-tap → no duplicate session
@@ -74,6 +77,7 @@ function StartBar({
     setError(null)
     try {
       await createSession(board.layoutId, defaultSessionName(boardShortLabel(board.name), new Date()))
+      setOpen(false)
       onStarted()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Couldn’t start a session.')
@@ -90,23 +94,17 @@ function StartBar({
       </span>
       <div className="flex items-center gap-2">
         {error && <span className="truncate text-xs text-destructive">{error}</span>}
-        {/* Join by scanning a friend's QR — enabled signed-out too (the join route owns sign-in). */}
-        <ScanToJoinButton
-          variant="outline"
-          size="icon"
-          className="size-8"
-          aria-label="Scan to join a session"
-        >
-          <ScanQrCode className="size-4" />
-        </ScanToJoinButton>
-        <Button
-          size="sm"
-          disabled={!signedIn || starting}
-          title={signedIn ? undefined : 'Sign in to start a session'}
-          onClick={() => void start()}
-        >
-          {starting ? 'Starting…' : 'Start session'}
+        <Button size="sm" onClick={() => setOpen(true)}>
+          Start or join
         </Button>
+
+        <ScanToJoin
+          open={open}
+          onOpenChange={setOpen}
+          onStart={() => void start()}
+          starting={starting}
+          canStart={signedIn}
+        />
       </div>
     </div>
   )

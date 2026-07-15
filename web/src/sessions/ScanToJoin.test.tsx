@@ -26,23 +26,33 @@ vi.mock('./qrDecoder', () => ({
   ensureDecoder: () => h.ensureDecoder(),
 }))
 
-// Lightweight drawer stand-in. It keeps content mounted regardless of `open` — mirroring base-ui,
-// which holds the popup through its ~450ms close animation. That's deliberate: the component must
-// not flash the fallback branch while closing, and a mock that unmounted on close would hide it.
-vi.mock('@/components/ui/drawer', () => {
+// Lightweight dialog stand-in. It keeps content mounted regardless of `open` — mirroring base-ui,
+// which holds the popup through its close animation. That's deliberate: the component must not
+// flash the fallback branch while closing, and a mock that unmounted on close would hide it.
+vi.mock('@/components/ui/dialog', () => {
   type Kids = { children?: React.ReactNode }
   return {
-    Drawer: ({ children }: Kids) => <div>{children}</div>,
-    DrawerContent: ({ children }: Kids) => <div>{children}</div>,
-    DrawerHeader: ({ children }: Kids) => <div>{children}</div>,
-    DrawerTitle: ({ children }: Kids) => <h2>{children}</h2>,
-    DrawerDescription: ({ children }: Kids) => <p>{children}</p>,
+    Dialog: ({ children }: Kids) => <div>{children}</div>,
+    DialogContent: ({ children }: Kids) => <div>{children}</div>,
+    DialogHeader: ({ children }: Kids) => <div>{children}</div>,
+    DialogTitle: ({ children }: Kids) => <h2>{children}</h2>,
+    DialogDescription: ({ children }: Kids) => <p>{children}</p>,
   }
 })
 
 import { ScanToJoin } from './ScanToJoin'
 
-function Harness({ initialOpen = true }: { initialOpen?: boolean }) {
+function Harness({
+  initialOpen = true,
+  onStart,
+  starting,
+  canStart,
+}: {
+  initialOpen?: boolean
+  onStart?: () => void
+  starting?: boolean
+  canStart?: boolean
+}) {
   const [open, setOpen] = useState(initialOpen)
   return (
     <ScanToJoin
@@ -51,6 +61,9 @@ function Harness({ initialOpen = true }: { initialOpen?: boolean }) {
         h.onOpenChange(o)
         setOpen(o)
       }}
+      onStart={onStart}
+      starting={starting}
+      canStart={canStart}
     />
   )
 }
@@ -150,5 +163,25 @@ describe('ScanToJoin', () => {
 
     // fresh load succeeds (proves a per-attempt loader, not a memoized rejection)
     await waitFor(() => expect(screen.getByTestId('fake-scanner')).toBeInTheDocument())
+  })
+
+  it('is camera-only (no host action) when onStart is absent', async () => {
+    render(<Harness />)
+    await screen.findByTestId('fake-scanner')
+    expect(screen.queryByRole('button', { name: /start your own session/i })).not.toBeInTheDocument()
+  })
+
+  it('surfaces the host action when onStart is provided, and invokes it', async () => {
+    const onStart = vi.fn()
+    render(<Harness onStart={onStart} canStart />)
+    await screen.findByTestId('fake-scanner')
+    fireEvent.click(screen.getByRole('button', { name: /start your own session/i }))
+    expect(onStart).toHaveBeenCalled()
+  })
+
+  it('disables the host action when the user cannot start (signed out)', async () => {
+    render(<Harness onStart={vi.fn()} canStart={false} />)
+    await screen.findByTestId('fake-scanner')
+    expect(screen.getByRole('button', { name: /start your own session/i })).toBeDisabled()
   })
 })

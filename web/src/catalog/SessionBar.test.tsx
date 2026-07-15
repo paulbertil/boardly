@@ -26,12 +26,30 @@ vi.mock('../sessions/sessionsStore', () => ({
 vi.mock('../sessions/memberAscentsStore', () => ({ refreshMemberAscents: () => h.refreshMemberAscents() }))
 vi.mock('../auth/AuthProvider', () => ({ useAuth: () => ({ status: h.authStatus }) }))
 vi.mock('../sessions/ShareSession', () => ({ ShareSession: () => <div>share-surface</div> }))
+// Stand-in for the scanner-first launcher: exposes the scanner surface plus the demoted host
+// action so StartBar's wiring (open, onStart, canStart) is observable without the real camera.
 vi.mock('../sessions/ScanToJoin', () => ({
-  ScanToJoinButton: (p: { children: React.ReactNode; 'aria-label'?: string; disabled?: boolean }) => (
-    <button aria-label={p['aria-label']} disabled={p.disabled}>
-      {p.children}
-    </button>
-  ),
+  ScanToJoin: ({
+    open,
+    onStart,
+    starting,
+    canStart,
+  }: {
+    open: boolean
+    onStart?: () => void
+    starting?: boolean
+    canStart?: boolean
+  }) =>
+    open ? (
+      <div>
+        <div>scanner-surface</div>
+        {onStart && (
+          <button disabled={!canStart || starting} onClick={onStart}>
+            Start your own session
+          </button>
+        )}
+      </div>
+    ) : null,
 }))
 
 import { SessionBar } from './SessionBar'
@@ -50,31 +68,26 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks())
 
 describe('SessionBar', () => {
-  it('offers Start session and creates one for this board, opening Share', async () => {
+  it('opens the scanner-first launcher and starts a session from it, opening Share', async () => {
     render(<SessionBar board={board} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Start session' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Start or join' }))
+    expect(screen.getByText('scanner-surface')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /start your own session/i }))
     expect(h.createSession).toHaveBeenCalledWith(board.layoutId, expect.any(String))
     expect(await screen.findByText('share-surface')).toBeInTheDocument()
   })
 
-  it('disables Start session when signed out', () => {
+  it('disables the host action in the launcher when signed out', () => {
     h.authStatus = 'signedOut'
     render(<SessionBar board={board} />)
-    expect(screen.getByRole('button', { name: 'Start session' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Start or join' }))
+    expect(screen.getByRole('button', { name: /start your own session/i })).toBeDisabled()
   })
 
-  it('offers Scan to join in the StartBar, enabled even when signed out', () => {
-    h.authStatus = 'signedOut'
-    render(<SessionBar board={board} />)
-    const scan = screen.getByRole('button', { name: 'Scan to join a session' })
-    expect(scan).toBeInTheDocument()
-    expect(scan).toBeEnabled()
-  })
-
-  it('drops the Scan to join affordance once a session for this board is active', () => {
+  it('drops the Start-or-join affordance once a session for this board is active', () => {
     h.sessions = { activeSession: { id: 'S1', name: 'Crew', boardLayoutId: 7 }, roster: [], selfId: null }
     render(<SessionBar board={board} />)
-    expect(screen.queryByRole('button', { name: 'Scan to join a session' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Start or join' })).not.toBeInTheDocument()
   })
 
   it('renders nothing when a session is active for a different board', () => {

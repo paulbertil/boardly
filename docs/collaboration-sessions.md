@@ -85,7 +85,7 @@ keeps it alive for everyone; the 24h backstop only fires once *all* members go q
   unchanged. Dimmed when the projection is paused/stale so it never shows crisp "who" the filter
   itself no longer trusts), `catalog/SessionBar.tsx`
   (in-context bar: rename, members, refresh, Share, Leave;
-  Start session when solo, plus a **Scan-to-join** button), `sessions/ShareSession.tsx` (QR +
+  a single **Start or join** button when solo), `sessions/ShareSession.tsx` (QR +
   copy/share of the join link), `shell/SessionPill.tsx` (global pill on every non-catalog route,
   with roster + owner remove-member + Leave), `sessions/JoinSession.tsx` (`/session/join/$token`
   — sign-in → consent → join → land in the board catalog).
@@ -94,26 +94,35 @@ keeps it alive for everyone; the 24h backstop only fires once *all* members go q
   `/session/join/:token` on **any** origin (prod/preview/localhost QRs interop) and only ever
   yields the token — the scanned origin is never navigated to.
 
-## Joining by in-app QR scan
+## Starting or joining: the scanner-first launcher
 
-A joiner doesn't need their phone's camera app: `sessions/ScanToJoin.tsx` is a bottom-drawer
-camera scanner reached from the catalog StartBar and the boards overview (both idle-state only;
-enabled signed-out, since `JoinSession` owns sign-in). It's a thin **decode → parse → navigate**
-layer — it decodes the QR, lifts the token via `parseJoinUrl`, and navigates to the existing
-`/session/join/$token` route, which still owns consent and the join RPC unchanged.
+`sessions/ScanToJoin.tsx` is a centered **`Dialog`** that opens straight to the camera: a joiner
+doesn't need their phone's camera app — a friend's session QR in frame **auto-joins**. It's a thin
+**decode → parse → navigate** layer: it lifts the token via `parseJoinUrl` and navigates to the
+existing `/session/join/$token` route, which still owns consent and the join RPC unchanged.
 
+- **Scanner-first, host demoted.** The catalog's single "Start or join" button opens the launcher
+  on the camera (joining is the time-sensitive at-the-wall act); "Start your own session" sits
+  below an "or" divider as the host path. `ScanToJoin` takes an optional `onStart`/`starting`/
+  `canStart` — the boards overview (`shell/MyBoards.tsx`, via `ScanToJoinButton`) omits it and is
+  camera-only, since there's no board context to host in. Joining works signed-out (`JoinSession`
+  owns sign-in); only hosting needs an account. Tradeoff: opening the dialog prompts for camera
+  permission even for a would-be host — mitigated by the always-visible Start button and the paste
+  fallback.
 - **`sessions/qrDecoder.ts`** is the dynamic-import boundary: the `@yudiel/react-qr-scanner`
-  wrapper and the ~433 kB `zxing-wasm` reader load only when the drawer opens (the app's first
+  wrapper and the ~433 kB `zxing-wasm` reader load only when the dialog opens (the app's first
   code-split). iOS Safari still ships `BarcodeDetector` disabled, so a WASM decoder is mandatory.
 - The reader WASM is **self-hosted** (bundled via Vite `?url`, never fetched from jsDelivr) and
   **excluded from the SW precache** (`globIgnores` + a CacheFirst runtime route in
   `vite.config.ts`) — it would bloat every install, and scanning needs the network anyway.
 - WASM prep is a **retryable** runtime step (`ensureDecoder`), not a top-level await: a failed
   offline fetch clears its memo so a later retry recovers, rather than leaving the module record
-  permanently errored. Any load failure routes to the drawer's paste-link fallback, which reuses
-  the same `parseJoinUrl` — so a camera-less or offline joiner is never stuck.
-- Camera lifecycle: rear camera (`facingMode: 'environment'`), stream torn down on drawer close,
-  and re-acquired on foreground (iOS standalone PWAs freeze the stream when backgrounded).
+  permanently errored. Any load failure routes to the paste-link fallback, which reuses the same
+  `parseJoinUrl` — so a camera-less or offline joiner is never stuck.
+- The visible body branches on `phase` (scanning / fallback), and only the live camera mount is
+  gated on the dialog being open — so closing tears the stream down without flashing the fallback
+  card during the close animation. Rear camera (`facingMode: 'environment'`); re-acquired on
+  foreground (iOS standalone PWAs freeze the stream when backgrounded).
 
 ## Security posture (read before changing)
 
