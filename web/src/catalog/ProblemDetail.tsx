@@ -29,6 +29,7 @@ import { useFavorites } from './favoritesStore'
 import { LogAscentSheet, type LogTarget } from '../logbook/LogAscentSheet'
 import { useAddToList } from '../lists/useAddToList'
 import { BetaVideos } from '../beta/BetaVideos'
+import { ProblemDetailAddToQueue } from './ProblemDetailAddToQueue'
 import { Button } from '@/components/ui/button'
 
 interface ProblemDetailProps {
@@ -271,6 +272,7 @@ export function ProblemDetail({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
+          <ProblemDetailAddToQueue sourceCatalogId={currentId} boardLayoutId={board.layoutId} />
           <Button
             variant="ghost"
             size="icon"
