@@ -5,22 +5,30 @@
 // ShareSession affordance, and a deliberate Leave. The owner-removes-member control (KTD-11)
 // lives in the SessionBar's ⋯ menu.
 
+import { useNavigate } from '@tanstack/react-router'
 import { Users } from 'lucide-react'
 import { leaveSession, useSessions } from '../sessions/sessionsStore'
 import { ShareSession } from '../sessions/ShareSession'
 import { MemberAvatar } from '../sessions/MemberAvatar'
+import { QueueDrawer } from '../sessions/QueueDrawer'
 import { memberInitials, memberLabel } from '../sessions/sessionsTypes'
+import { boardByLayoutId } from '../board/boards'
+import { catalogNavTarget } from '../catalog/catalogNav'
 import { AvatarGroup } from '@/components/ui/avatar'
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer'
 import { Button } from '@/components/ui/button'
 
 export function SessionPill({ suppressed }: { suppressed?: boolean }) {
   const { activeSession, roster, selfId } = useSessions()
+  const navigate = useNavigate()
   // Self-gating: nothing to show without an active session, and suppressed on the catalog
   // route (the SessionBar owns that surface).
   if (!activeSession || suppressed) return null
 
   const count = roster.length || 1
+  // The session is board-bound; tapping a queued row navigates to that board's catalog first
+  // (this pill lives off-catalog), then opens the shared ?problem drawer there (KTD9).
+  const board = boardByLayoutId(activeSession.boardLayoutId)
 
   return (
     <Drawer showSwipeHandle>
@@ -51,6 +59,18 @@ export function SessionPill({ suppressed }: { suppressed?: boolean }) {
                 />
               ))}
             </AvatarGroup>
+          )}
+
+          {/* Queue — the session playlist entry (badge = active count). Opens the queue drawer. */}
+          {board && (
+            <QueueDrawer
+              board={board}
+              triggerClassName="w-full justify-start px-3 py-2"
+              onOpenProblem={(id) => {
+                const target = catalogNavTarget(board)
+                void navigate({ ...target, search: { ...target.search, problem: id } })
+              }}
+            />
           )}
 
           {/* Share */}

@@ -4,8 +4,10 @@
 // DIFFERENT board is active it renders nothing (the global pill surfaces that one).
 
 import { useCallback, useRef, useState } from 'react'
+import { getRouteApi } from '@tanstack/react-router'
 import { MoreHorizontal, RefreshCw, Share2, Users, X } from 'lucide-react'
 import type { CatalogBoardDef } from '../board/boards'
+import { QueueDrawer } from '../sessions/QueueDrawer'
 import { boardShortLabel } from '../lists/listsTypes'
 import { useAuth } from '../auth/AuthProvider'
 import {
@@ -27,6 +29,10 @@ import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
+
+// SessionBar only ever renders under the board catalog route, so the queue entry can drive the
+// shared ?problem drawer with a same-route search update (KTD9).
+const routeApi = getRouteApi('/board/$layoutId/catalog')
 
 export function SessionBar({ board }: { board: CatalogBoardDef }) {
   const { activeSession } = useSessions()
@@ -104,6 +110,7 @@ function StartBar({
 
 function ActiveBar({ board, onShare }: { board: CatalogBoardDef; onShare: () => void }) {
   const { activeSession, roster, selfId } = useSessions()
+  const navigate = routeApi.useNavigate()
   const [refreshing, setRefreshing] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const isOwner = !!selfId && activeSession?.ownerId === selfId
@@ -146,6 +153,11 @@ function ActiveBar({ board, onShare }: { board: CatalogBoardDef; onShare: () => 
       </AvatarGroup>
 
       <div className="ml-auto flex items-center gap-1">
+        <QueueDrawer
+          board={board}
+          triggerClassName="px-2 py-1 text-xs"
+          onOpenProblem={(id) => void navigate({ search: (prev) => ({ ...prev, problem: id }) })}
+        />
         <Button variant="ghost" size="icon" className="size-8" onClick={() => void refresh()} aria-label="Refresh members">
           <RefreshCw className={cn('size-4', refreshing && 'animate-spin')} />
         </Button>

@@ -26,6 +26,10 @@ vi.mock('../sessions/sessionsStore', () => ({
 vi.mock('../sessions/memberAscentsStore', () => ({ refreshMemberAscents: () => h.refreshMemberAscents() }))
 vi.mock('../auth/AuthProvider', () => ({ useAuth: () => ({ status: h.authStatus }) }))
 vi.mock('../sessions/ShareSession', () => ({ ShareSession: () => <div>share-surface</div> }))
+// ActiveBar now resolves a route navigate for the queue's tap-to-open (KTD9); stub the router
+// api (this test renders ActiveBar without a router) and the QueueDrawer (its own unit's concern).
+vi.mock('@tanstack/react-router', () => ({ getRouteApi: () => ({ useNavigate: () => vi.fn() }) }))
+vi.mock('../sessions/QueueDrawer', () => ({ QueueDrawer: () => null }))
 
 import { SessionBar } from './SessionBar'
 
