@@ -21,6 +21,10 @@ describe('parseJoinUrl', () => {
     expect(parseJoinUrl('  https://boardhang.app/session/join/abc123  \n')).toBe('abc123')
   })
 
+  it('tolerates a pasted link that lost its scheme', () => {
+    expect(parseJoinUrl('boardhang.app/session/join/abc123')).toBe('abc123')
+  })
+
   it('returns null for a bare token string (not a URL)', () => {
     expect(parseJoinUrl('abc123')).toBeNull()
   })

@@ -64,7 +64,7 @@ export function MyBoards({ onActivated }: MyBoardsProps) {
   return (
     <div className="space-y-4">
       {!activeSession && (
-        <ScanToJoinButton variant="outline" className="w-full" aria-label="Scan to join a session">
+        <ScanToJoinButton variant="outline" className="w-full">
           <ScanQrCode className="size-4" />
           Scan to join a session
         </ScanToJoinButton>

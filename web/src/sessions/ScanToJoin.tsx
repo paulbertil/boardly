@@ -3,10 +3,10 @@
 // camera states (KTD-4); sign-in, consent, and the join RPC stay in JoinSession.
 //
 // The heavy decoder (@yudiel/react-qr-scanner + ~433 kB WASM) loads only when the drawer opens,
-// via a manual dynamic import rather than React.lazy: React.lazy memoizes a rejected import, so
-// its retry edge is unrecoverable, and we need retry to work after an offline open (KTD-5). The
-// loader awaits both the chunk and the retryable ensureDecoder() WASM prep; any failure routes to
-// the paste fallback, which is never a dead end (R6).
+// via a manual dynamic import that awaits both the chunk and the retryable ensureDecoder() WASM
+// prep in one place and can retry per attempt. React.lazy is a poor fit here: it memoizes a
+// rejected import, so its retry edge can't recover an offline first open (KTD-5). Any load failure
+// routes to the paste fallback, which is never a dead end (R6).
 
 import { useCallback, useEffect, useRef, useState, type ComponentType } from 'react'
 import { useNavigate } from '@tanstack/react-router'
@@ -22,8 +22,11 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from '@/components/ui/drawer'
+import { cn } from '@/lib/utils'
 
 type ScannerComponent = ComponentType<IScannerProps>
+// 'fallback' covers both a real camera failure and the user choosing to type the link instead.
+type Phase = 'scanning' | 'fallback'
 
 /** Loads the scanner chunk + WASM on mount (and on each `attempt`), then renders the camera. A
  *  chunk or WASM failure calls `onError` so the parent shows the paste fallback; bumping `attempt`
@@ -70,7 +73,9 @@ function ScannerStage({
     <div className="overflow-hidden rounded-lg [&_video]:aspect-square [&_video]:w-full [&_video]:object-cover">
       <Scanner
         onScan={(codes) => {
-          const raw = codes[0]?.rawValue
+          // Prefer the first code that is actually a session link — a stray non-session QR in
+          // frame shouldn't shadow the one the user is aiming at.
+          const raw = (codes.find((c) => parseJoinUrl(c.rawValue)) ?? codes[0])?.rawValue
           if (raw) onDecode(raw)
         }}
         onError={onError}
@@ -83,8 +88,23 @@ function ScannerStage({
   )
 }
 
-/** Controlled scanner drawer. Mount the scanner subtree only while open + scanning so closing the
- *  drawer unmounts it and tears down the camera stream (R9). */
+function Hint({ text, tone }: { text: string | null; tone: 'muted' | 'error' }) {
+  return (
+    <p
+      aria-live="polite"
+      className={cn(
+        'min-h-5 text-center text-sm',
+        tone === 'error' ? 'text-destructive' : 'text-muted-foreground',
+      )}
+    >
+      {text}
+    </p>
+  )
+}
+
+/** Controlled scanner drawer. The visible branch is chosen by `phase` (not `open`) so the drawer's
+ *  close animation never flashes the fallback card; only the live camera (`ScannerStage`) is gated
+ *  on `open`, so closing tears the stream down (R9). */
 export function ScanToJoin({
   open,
   onOpenChange,
@@ -93,7 +113,7 @@ export function ScanToJoin({
   onOpenChange: (open: boolean) => void
 }) {
   const navigate = useNavigate()
-  const [phase, setPhase] = useState<'scanning' | 'unavailable'>('scanning')
+  const [phase, setPhase] = useState<Phase>('scanning')
   const [attempt, setAttempt] = useState(0)
   const [paused, setPaused] = useState(false)
   const [hint, setHint] = useState<string | null>(null)
@@ -114,9 +134,11 @@ export function ScanToJoin({
     [navigate, onOpenChange],
   )
 
-  // Fresh drawer open → back to a clean scanning state.
+  // Reset when the drawer closes, so the next open always starts clean (and never paints a stale
+  // fallback view for a frame). Runs on close, not open, so the reset is invisible behind the
+  // closing animation rather than a post-open flash.
   useEffect(() => {
-    if (open) {
+    if (!open) {
       setPhase('scanning')
       setPaused(false)
       setHint(null)
@@ -127,7 +149,8 @@ export function ScanToJoin({
   useEffect(() => () => void (hintTimer.current && clearTimeout(hintTimer.current)), [])
 
   // iOS standalone PWAs freeze the stream on backgrounding; pause while hidden and re-acquire a
-  // fresh stream (not just unpause) on return, since the old one is dead.
+  // fresh stream (not just unpause) on return, since the old one is dead. Only bump the attempt
+  // while actually scanning — in the fallback phase there is no ScannerStage to re-acquire.
   useEffect(() => {
     if (!open) return
     const onVisibility = () => {
@@ -135,12 +158,12 @@ export function ScanToJoin({
         setPaused(true)
       } else {
         setPaused(false)
-        setAttempt((a) => a + 1)
+        if (phase === 'scanning') setAttempt((a) => a + 1)
       }
     }
     document.addEventListener('visibilitychange', onVisibility)
     return () => document.removeEventListener('visibilitychange', onVisibility)
-  }, [open])
+  }, [open, phase])
 
   const onDecode = useCallback(
     (raw: string) => {
@@ -151,7 +174,12 @@ export function ScanToJoin({
     [goToJoin, flashHint],
   )
 
-  const onScannerError = useCallback(() => setPhase('unavailable'), [])
+  // Entering the fallback (camera error or user choice) clears any transient scan hint so the
+  // paste view doesn't open showing a stale red "Not a session code".
+  const enterFallback = useCallback(() => {
+    setHint(null)
+    setPhase('fallback')
+  }, [])
 
   const retry = useCallback(() => {
     setHint(null)
@@ -176,21 +204,22 @@ export function ScanToJoin({
         </DrawerHeader>
 
         <div className="flex flex-col gap-3 px-4 pb-[calc(2rem+env(safe-area-inset-bottom))]">
-          {open && phase === 'scanning' ? (
+          {phase === 'scanning' ? (
             <>
-              <ScannerStage
-                attempt={attempt}
-                paused={paused}
-                onDecode={onDecode}
-                onError={onScannerError}
-              />
-              <p
-                aria-live="polite"
-                className="min-h-5 text-center text-sm text-muted-foreground"
-              >
-                {hint}
-              </p>
-              <Button variant="ghost" size="sm" onClick={() => setPhase('unavailable')}>
+              {open ? (
+                <ScannerStage
+                  attempt={attempt}
+                  paused={paused}
+                  onDecode={onDecode}
+                  onError={enterFallback}
+                />
+              ) : (
+                // Closing: keep the scanner's footprint while the drawer animates out, without a
+                // live camera.
+                <div className="aspect-square w-full rounded-lg bg-muted" />
+              )}
+              <Hint text={hint} tone="muted" />
+              <Button variant="ghost" size="sm" onClick={enterFallback}>
                 Enter the link instead
               </Button>
             </>
@@ -217,9 +246,7 @@ export function ScanToJoin({
                 autoCorrect="off"
                 spellCheck={false}
               />
-              <p aria-live="polite" className="min-h-5 text-center text-sm text-destructive">
-                {hint}
-              </p>
+              <Hint text={hint} tone="error" />
               <div className="flex gap-2">
                 <Button variant="outline" className="flex-1" onClick={retry}>
                   <ScanQrCode className="size-4" />
@@ -238,31 +265,17 @@ export function ScanToJoin({
 }
 
 /** Reusable trigger: a button (styled by the caller) that owns the drawer's open state. Both entry
- *  points — StartBar and the boards overview — render this. */
+ *  points — StartBar and the boards overview — render this. Spreads through `Button`'s props so
+ *  callers can pass `disabled`, `title`, `size`, etc. */
 export function ScanToJoinButton({
-  children,
-  className,
   variant = 'outline',
-  size,
-  'aria-label': ariaLabel,
-}: {
-  children: React.ReactNode
-  className?: string
-  variant?: React.ComponentProps<typeof Button>['variant']
-  size?: React.ComponentProps<typeof Button>['size']
-  'aria-label'?: string
-}) {
+  children,
+  ...props
+}: React.ComponentProps<typeof Button>) {
   const [open, setOpen] = useState(false)
   return (
     <>
-      <Button
-        type="button"
-        variant={variant}
-        size={size}
-        className={className}
-        aria-label={ariaLabel}
-        onClick={() => setOpen(true)}
-      >
+      <Button type="button" variant={variant} {...props} onClick={() => setOpen(true)}>
         {children}
       </Button>
       <ScanToJoin open={open} onOpenChange={setOpen} />

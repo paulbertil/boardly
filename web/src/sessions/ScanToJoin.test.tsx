@@ -26,12 +26,13 @@ vi.mock('./qrDecoder', () => ({
   ensureDecoder: () => h.ensureDecoder(),
 }))
 
-// Lightweight drawer stand-in: renders content only while open (mirrors base-ui unmount-on-close),
-// so a close teardown and the open gate are observable without base-ui's portal/ResizeObserver.
+// Lightweight drawer stand-in. It keeps content mounted regardless of `open` — mirroring base-ui,
+// which holds the popup through its ~450ms close animation. That's deliberate: the component must
+// not flash the fallback branch while closing, and a mock that unmounted on close would hide it.
 vi.mock('@/components/ui/drawer', () => {
   type Kids = { children?: React.ReactNode }
   return {
-    Drawer: ({ open, children }: Kids & { open: boolean }) => (open ? <div>{children}</div> : null),
+    Drawer: ({ children }: Kids) => <div>{children}</div>,
     DrawerContent: ({ children }: Kids) => <div>{children}</div>,
     DrawerHeader: ({ children }: Kids) => <div>{children}</div>,
     DrawerTitle: ({ children }: Kids) => <h2>{children}</h2>,
@@ -79,6 +80,8 @@ describe('ScanToJoin', () => {
     expect(h.onOpenChange).toHaveBeenCalledWith(false)
     // drawer closed → scanner torn down
     expect(screen.queryByTestId('fake-scanner')).not.toBeInTheDocument()
+    // ...and the fallback card must NOT flash while the drawer animates out
+    expect(screen.queryByText(/camera unavailable/i)).not.toBeInTheDocument()
   })
 
   it('keeps scanning and shows a transient hint for a non-session QR', async () => {

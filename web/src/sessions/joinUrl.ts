@@ -10,16 +10,23 @@ export function buildJoinUrl(token: string): string {
   return `${window.location.origin}/session/join/${token}`
 }
 
-/** Return the invite token for any URL whose path is `/session/join/:token` (origin ignored),
- *  or null for anything else — a bare token, an unrelated path, or non-URL garbage like a
- *  Wi-Fi QR payload. Tolerates surrounding whitespace and a trailing slash. */
-export function parseJoinUrl(text: string): string | null {
-  let url: URL
+function tryUrl(text: string): URL | null {
   try {
-    url = new URL(text.trim())
+    return new URL(text)
   } catch {
     return null
   }
+}
+
+/** Return the invite token for any URL whose path is `/session/join/:token` (origin ignored),
+ *  or null for anything else — a bare token, an unrelated path, or non-URL garbage like a
+ *  Wi-Fi QR payload. Tolerates surrounding whitespace, a trailing slash, and a pasted link that
+ *  lost its `https://` scheme. */
+export function parseJoinUrl(text: string): string | null {
+  const trimmed = text.trim()
+  // Retry with an assumed scheme so a hand-pasted `boardhang.app/session/join/…` still parses.
+  const url = tryUrl(trimmed) ?? tryUrl(`https://${trimmed}`)
+  if (!url) return null
   const match = JOIN_PATH.exec(url.pathname)
   return match ? match[1] : null
 }
