@@ -1,29 +1,32 @@
-// The session playlist queue drawer + its entry point (U4). A bottom Drawer (the SessionPill
-// idiom) opened from a "Queue" button whose badge shows the active-item count. Renders the active
-// list (each row reorderable via up/down or the U5 drag handle, check-offable, removable) and a
-// "Done" group below (un-checkable). The store (U2/queueStore) owns the optimistic writes and
-// rolls back on failure; this component surfaces that rollback as a sonner error toast so the
-// "writes fail loudly" promise (KTD5) is visible, announces check-offs/moves via an aria-live
-// region, and — on a row tap — closes the drawer and opens the problem via the shared ?problem
-// navigation (KTD9). Lighting stays the manual lightbulb; opening the queue never lights the board.
+// The session playlist queue drawer + its entry point (U4). A bottom Drawer opened from a "Queue"
+// button whose badge shows the active-item count. Default view: an "Up next" list of the active
+// climbs (each a recents-style preview that opens the problem on tap) and a "Done" group below.
+// Tapping a row opens the shared ?problem detail pager over the queue's order, so next/prev in the
+// detail view follows the queue. An Edit toggle flips the active list into a dnd-kit reorder list
+// (drag handle + remove). The store (U2/queueStore) owns the optimistic writes and rolls back on
+// failure; this surfaces that rollback as a sonner error toast (KTD5) and announces reorder moves
+// via an aria-live region. Lighting stays the manual lightbulb; opening the queue never lights the
+// board.
 //
 // Rendered only when a session is active on this board: SessionBar mounts it on the board catalog
 // (a same-route ?problem update); SessionPill mounts it off-catalog (navigate to the board first).
 
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { ListMusic } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { ListVideo } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CatalogBoardDef } from '../board/boards'
 import { getCatalogProblemsByIds, type CatalogProblem } from '../catalog/catalogSync'
 import { useMemberSenders } from '../catalog/useMemberSenders'
-import { addProblem, checkOff, removeItem, reorder, unCheck, useSessionQueue } from './queueStore'
+import { addProblem, removeItem, reorder, useSessionQueue } from './queueStore'
 import type { QueueItem } from './queueTypes'
 import { useSessions } from './sessionsStore'
 import { QueueItemRow } from './QueueItemRow'
-import { useDragReorder } from './useDragReorder'
+import { useShowPreviews } from '../catalog/previewsStore'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Sortable, SortableContent } from '@/components/ui/sortable'
 import { cn } from '@/lib/utils'
 
 /** Shown on any failed queue write — the store has already rolled the optimistic change back. */
@@ -32,11 +35,13 @@ const QUEUE_WRITE_ERROR = "Couldn't update the queue — check your connection"
 export interface QueueDrawerProps {
   board: CatalogBoardDef
   /**
-   * Close-then-open the problem via the shared ?problem navigation (KTD9). Surface-specific: a
-   * same-route search update from SessionBar (already on the board catalog), or navigate-to-board-
-   * then-open from SessionPill (off-catalog). QueueDrawer closes itself before calling this.
+   * Close-then-open the problem via the shared ?problem navigation (KTD9), paging over `stack` —
+   * the queue's active items in order — so next/prev in the detail view follow the queue. Surface-
+   * specific: SessionBar hands this to the CatalogScreen pager (which snapshots `stack` as the
+   * paging domain); SessionPill navigates to the board first (off-catalog) and pages the catalog
+   * there. QueueDrawer closes itself before calling this.
    */
-  onOpenProblem: (sourceCatalogId: string) => void
+  onOpenProblem: (sourceCatalogId: string, stack: CatalogProblem[]) => void
   /** Styles the entry-point trigger to match the host chrome (catalog bar vs. pill panel). */
   triggerClassName?: string
 }
@@ -50,9 +55,14 @@ export function QueueDrawer({ board, onOpenProblem, triggerClassName }: QueueDra
   const senders = memberSenders?.senders
 
   const [open, setOpen] = useState(false)
+  // Edit mode flips the active list from recents-style preview rows into compact reorder rows
+  // (drag handle + remove). Reorder and removal live here so the default view stays a clean
+  // tap-to-open playlist. Reset whenever the drawer closes.
+  const [editing, setEditing] = useState(false)
   const [liveMessage, setLiveMessage] = useState('')
-  const activeListRef = useRef<HTMLUListElement>(null)
   const [problemsById, setProblemsById] = useState<Map<string, CatalogProblem>>(new Map())
+  // The queue's preview rows follow the same "climb previews" toggle as the catalog/recents list.
+  const showThumbnails = useShowPreviews('catalog')
 
   // Resolve queued ids → catalog titles/grades (board-agnostic, offline IndexedDB lookup). Keyed
   // on the joined id list so it refetches only when the set of queued problems actually changes.
@@ -77,43 +87,20 @@ export function QueueDrawer({ board, onOpenProblem, triggerClassName }: QueueDra
 
   const nameOf = (id: string) => problemsById.get(id)?.name ?? 'this climb'
 
-  // Touch drag-to-reorder (U5), bound to the active list. Only a press starting on a row's drag
-  // handle engages; a drop into a new slot emits the new order (a same-slot drop is a no-op).
-  // Declared before the `sessionForBoard` guard so the hook order is stable across renders.
-  const drag = useDragReorder(activeListRef, {
-    ids: activeItems.map((i) => i.id),
-    enabled: activeItems.length > 1,
-    onReorder: (nextIds) => {
-      const movedId = drag.draggingId
-      const moved = activeItems.find((i) => i.id === movedId)
-      submitReorder(nextIds, nameOf(moved?.sourceCatalogId ?? ''), nextIds.indexOf(movedId ?? '') + 1)
-    },
-  })
-
   if (!sessionForBoard) return null
 
   const count = activeItems.length
 
+  // The ordered paging domain the detail pager follows when a queue row (or Play) opens a problem:
+  // the active items resolved to catalog problems, in queue order. Ids whose lookup is still pending
+  // are skipped (they page in once resolved).
+  const queueStack = activeItems
+    .map((i) => problemsById.get(i.sourceCatalogId))
+    .filter((p): p is CatalogProblem => Boolean(p))
+
   const openRow = (item: QueueItem) => {
     setOpen(false) // one drawer at a time (KTD9): close before the problem drawer opens
-    onOpenProblem(item.sourceCatalogId)
-  }
-
-  const handleCheckOff = (item: QueueItem) => {
-    const name = nameOf(item.sourceCatalogId)
-    void checkOff(item.id)
-      .then(() => setLiveMessage(`${name} checked off`))
-      .catch(() => toast.error(QUEUE_WRITE_ERROR))
-  }
-
-  const handleUnCheck = (item: QueueItem) => {
-    const name = nameOf(item.sourceCatalogId)
-    void unCheck(item.id)
-      .then((result) => {
-        if (result === 'already-active') toast(`${name} is already in the queue`)
-        else setLiveMessage(`${name} moved back to the queue`)
-      })
-      .catch(() => toast.error(QUEUE_WRITE_ERROR))
+    onOpenProblem(item.sourceCatalogId, queueStack)
   }
 
   const handleRemove = (item: QueueItem) => {
@@ -135,28 +122,50 @@ export function QueueDrawer({ board, onOpenProblem, triggerClassName }: QueueDra
       .catch(() => toast.error(QUEUE_WRITE_ERROR))
   }
 
-  // Shared reorder submit for both paths (up/down controls + U5 drag): optimistic RPC in the store,
-  // rollback-to-server-order on failure surfaced as the same error toast as every other write.
+  // Reorder submit: optimistic RPC in the store, rollback-to-server-order on failure surfaced as
+  // the same error toast as every other write.
   const submitReorder = (nextIds: string[], name: string, position: number) => {
     void reorder(nextIds)
       .then(() => setLiveMessage(`${name} moved to position ${position}`))
       .catch(() => toast.error(QUEUE_WRITE_ERROR))
   }
 
-  const handleMove = (item: QueueItem, dir: -1 | 1) => {
-    const ids = activeItems.map((i) => i.id)
-    const idx = ids.indexOf(item.id)
-    const target = idx + dir
-    if (idx < 0 || target < 0 || target >= ids.length) return
-    const next = [...ids]
-    ;[next[idx], next[target]] = [next[target], next[idx]]
-    submitReorder(next, nameOf(item.sourceCatalogId), target + 1)
+  // The dnd-kit Sortable hands back the fully reordered active list on drop. Persist the new id
+  // order and announce the moved climb's new position (the first slot whose occupant changed).
+  const handleSortReorder = (next: QueueItem[]) => {
+    const before = activeItems.map((i) => i.id)
+    const after = next.map((i) => i.id)
+    const movedIdx = after.findIndex((id, i) => id !== before[i])
+    if (movedIdx < 0) return // no change
+    submitReorder(after, nameOf(next[movedIdx].sourceCatalogId), movedIdx + 1)
   }
+
+  // A non-editing active row (recents-style, tap-to-open). Shared by the Next up + Up next groups.
+  const activeRow = (item: QueueItem) => (
+    <QueueItemRow
+      key={item.id}
+      item={item}
+      board={board}
+      problem={problemsById.get(item.sourceCatalogId)}
+      senders={senders?.get(item.sourceCatalogId)}
+      variant="active"
+      showThumbnail={showThumbnails}
+      onOpen={() => openRow(item)}
+      onRemove={() => handleRemove(item)}
+    />
+  )
 
   const isEmpty = activeItems.length === 0 && doneItems.length === 0
 
   return (
-    <Drawer open={open} onOpenChange={setOpen} showSwipeHandle>
+    <Drawer
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (!next) setEditing(false) // leave Edit mode behind when the drawer closes
+      }}
+      showSwipeHandle
+    >
       <DrawerTrigger
         aria-label={count > 0 ? `Queue, ${count} active` : 'Queue'}
         className={cn(
@@ -164,17 +173,22 @@ export function QueueDrawer({ board, onOpenProblem, triggerClassName }: QueueDra
           triggerClassName,
         )}
       >
-        <ListMusic className="size-4 shrink-0 text-primary" />
+        <ListVideo className="size-4 shrink-0 text-primary" />
         <span>Queue</span>
         {count > 0 && (
           <Badge className="ml-0.5 min-w-5 justify-center px-1.5 tabular-nums">{count}</Badge>
         )}
       </DrawerTrigger>
       <DrawerContent>
-        <DrawerHeader>
+        <DrawerHeader className="flex flex-row items-center justify-between">
           <DrawerTitle>Queue</DrawerTitle>
+          {activeItems.length > 0 && (
+            <Button variant="ghost" size="sm" onClick={() => setEditing((v) => !v)}>
+              {editing ? 'Done' : 'Edit'}
+            </Button>
+          )}
         </DrawerHeader>
-        {/* Announces check-offs and position changes (including a co-member's refetched reorder). */}
+        {/* Announces reorder position changes (including a co-member's refetched reorder). */}
         <div aria-live="polite" className="sr-only" data-testid="queue-live">
           {liveMessage}
         </div>
@@ -191,28 +205,43 @@ export function QueueDrawer({ board, onOpenProblem, triggerClassName }: QueueDra
             </p>
           ) : (
             <>
-              {activeItems.length > 0 && (
-                <ul ref={activeListRef} className="mb-1">
-                  {activeItems.map((item, i) => (
-                    <QueueItemRow
-                      key={item.id}
-                      item={item}
-                      problem={problemsById.get(item.sourceCatalogId)}
-                      senders={senders?.get(item.sourceCatalogId)}
-                      variant="active"
-                      index={i}
-                      total={activeItems.length}
-                      onOpen={() => openRow(item)}
-                      onCheckOff={() => handleCheckOff(item)}
-                      onRemove={() => handleRemove(item)}
-                      onMove={(dir) => handleMove(item, dir)}
-                      isDragging={drag.draggingId === item.id}
-                      dragOffsetY={drag.offsetY}
-                      showDropIndicator={drag.draggingId !== null && drag.targetIndex === i && drag.draggingId !== item.id}
-                    />
-                  ))}
-                </ul>
-              )}
+              {activeItems.length > 0 &&
+                (editing ? (
+                  // Edit mode: dnd-kit Sortable owns the reorder. Each active row is a SortableItem
+                  // (see QueueItemRow); the drop hands back the reordered list to persist.
+                  <Sortable
+                    value={activeItems}
+                    onValueChange={handleSortReorder}
+                    getItemValue={(item) => item.id}
+                    orientation="vertical"
+                  >
+                    <SortableContent asChild>
+                      <ul className="mb-1">
+                        {activeItems.map((item) => (
+                          <QueueItemRow
+                            key={item.id}
+                            item={item}
+                            board={board}
+                            problem={problemsById.get(item.sourceCatalogId)}
+                            senders={senders?.get(item.sourceCatalogId)}
+                            variant="active"
+                            editing
+                            showThumbnail={showThumbnails}
+                            onOpen={() => openRow(item)}
+                            onRemove={() => handleRemove(item)}
+                          />
+                        ))}
+                      </ul>
+                    </SortableContent>
+                  </Sortable>
+                ) : (
+                  <>
+                    <h3 className="px-1 pt-1 pb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                      Up next
+                    </h3>
+                    <ul className="mb-1">{activeItems.map(activeRow)}</ul>
+                  </>
+                ))}
               {doneItems.length > 0 && (
                 <section>
                   <h3 className="px-1 pt-3 pb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
@@ -223,11 +252,13 @@ export function QueueDrawer({ board, onOpenProblem, triggerClassName }: QueueDra
                       <QueueItemRow
                         key={item.id}
                         item={item}
+                        board={board}
                         problem={problemsById.get(item.sourceCatalogId)}
                         senders={senders?.get(item.sourceCatalogId)}
                         variant="done"
+                        editing={editing}
+                        showThumbnail={showThumbnails}
                         onOpen={() => openRow(item)}
-                        onUnCheck={() => handleUnCheck(item)}
                         onRemove={() => handleRemove(item)}
                       />
                     ))}

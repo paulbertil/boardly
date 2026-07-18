@@ -38,10 +38,12 @@ vi.mock('../catalog/useMemberSenders', () => ({
   useMemberSenders: () => ({ senders: sendersMap, state: 'ready' }),
 }))
 
+// Fuller than the bare title/grade the old control rows needed: the recents-style preview row
+// renders ProblemMeta (setter) too, so each fixture carries a setter.
 const PROBLEMS: Record<string, Partial<CatalogProblem>> = {
-  p1: { source_catalog_id: 'p1', name: 'ALPHA', grade: '6A' },
-  p2: { source_catalog_id: 'p2', name: 'BRAVO', grade: '6B' },
-  p3: { source_catalog_id: 'p3', name: 'CHARLIE', grade: '7A' },
+  p1: { source_catalog_id: 'p1', name: 'ALPHA', grade: '6A', setter: 'Ann', holds: [] },
+  p2: { source_catalog_id: 'p2', name: 'BRAVO', grade: '6B', setter: 'Bo', holds: [] },
+  p3: { source_catalog_id: 'p3', name: 'CHARLIE', grade: '7A', setter: 'Cy', holds: [] },
 }
 vi.mock('../catalog/catalogSync', () => ({
   getCatalogProblemsByIds: (ids: string[]) => {
@@ -50,6 +52,10 @@ vi.mock('../catalog/catalogSync', () => ({
     return Promise.resolve(m)
   },
 }))
+
+// Thumbnails off in tests: the recents-style row renders CatalogBoard when on, which needs full
+// board geometry we don't fixture here. The preview toggle is exercised elsewhere.
+vi.mock('../catalog/previewsStore', () => ({ useShowPreviews: () => false }))
 
 const toastFn = vi.fn()
 const toastError = vi.fn()
@@ -92,6 +98,11 @@ function renderDrawer() {
 /** Open the drawer by clicking the entry-point trigger (its name starts with "Queue"). */
 function openDrawer() {
   fireEvent.click(screen.getByRole('button', { name: /^queue/i }))
+}
+
+/** Flip the open drawer into Edit mode (where drag handles + remove controls appear). */
+function enterEditMode() {
+  fireEvent.click(screen.getByRole('button', { name: /^edit$/i }))
 }
 
 beforeEach(() => {
@@ -152,34 +163,45 @@ describe('QueueDrawer', () => {
     expect(screen.queryByText(/no climbs queued yet/i)).not.toBeInTheDocument()
   })
 
-  it('checks a row off — calls the store and the row moves to the Done group', async () => {
+  it('has no check-off or up/down move controls (drag reorder + sent marker replace them)', async () => {
     queueState = {
       status: 'loaded',
-      activeItems: [activeItem('a1', 'p1', 1)],
+      activeItems: [activeItem('a1', 'p1', 1), activeItem('a2', 'p2', 2)],
       doneItems: [],
       error: null,
     }
-    const view = renderDrawer()
+    renderDrawer()
     openDrawer()
     await screen.findByText('ALPHA')
 
-    fireEvent.click(screen.getByRole('button', { name: /mark alpha done/i }))
-    expect(checkOff).toHaveBeenCalledWith('a1')
+    expect(screen.queryByRole('button', { name: /mark .* done/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /move .* up/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /move .* down/i })).not.toBeInTheDocument()
+    // Remove is hidden in the default view — it only appears in Edit mode.
+    expect(screen.queryByRole('button', { name: /remove .* from the queue/i })).not.toBeInTheDocument()
+  })
 
-    // The store owns the move; simulate its post-write state and re-render.
+  it('reveals the remove control only in Edit mode', async () => {
     queueState = {
       status: 'loaded',
-      activeItems: [],
-      doneItems: [doneItem('a1', 'p1', '2026-01-01T02:00:00Z')],
+      activeItems: [activeItem('a1', 'p1', 1), activeItem('a2', 'p2', 2)],
+      doneItems: [],
       error: null,
     }
-    view.rerender(<QueueDrawer board={board} onOpenProblem={onOpenProblem} />)
-    // ALPHA now carries the un-check control that only Done rows have.
-    expect(await screen.findByRole('button', { name: /move alpha back to the queue/i })).toBeInTheDocument()
+    renderDrawer()
+    openDrawer()
+    await screen.findByText('ALPHA')
+    expect(screen.queryByRole('button', { name: /remove alpha from the queue/i })).not.toBeInTheDocument()
+
+    enterEditMode()
+    expect(screen.getByRole('button', { name: /remove alpha from the queue/i })).toBeInTheDocument()
+    // Toggling back to the default view hides it again.
+    fireEvent.click(screen.getByRole('button', { name: /^done$/i }))
+    expect(screen.queryByRole('button', { name: /remove alpha from the queue/i })).not.toBeInTheDocument()
   })
 
   it('surfaces an error toast when a mutation rejects', async () => {
-    checkOff.mockRejectedValueOnce(new Error('offline'))
+    removeItem.mockRejectedValueOnce(new Error('offline'))
     queueState = {
       status: 'loaded',
       activeItems: [activeItem('a1', 'p1', 1)],
@@ -189,8 +211,9 @@ describe('QueueDrawer', () => {
     renderDrawer()
     openDrawer()
     await screen.findByText('ALPHA')
+    enterEditMode()
 
-    fireEvent.click(screen.getByRole('button', { name: /mark alpha done/i }))
+    fireEvent.click(screen.getByRole('button', { name: /remove alpha from the queue/i }))
     await waitFor(() =>
       expect(toastError).toHaveBeenCalledWith(expect.stringMatching(/couldn.t update the queue/i)),
     )
@@ -206,6 +229,7 @@ describe('QueueDrawer', () => {
     renderDrawer()
     openDrawer()
     await screen.findByText('ALPHA')
+    enterEditMode()
 
     fireEvent.click(screen.getByRole('button', { name: /remove alpha from the queue/i }))
     expect(removeItem).toHaveBeenCalledWith('a1')
@@ -236,21 +260,27 @@ describe('QueueDrawer', () => {
     expect(screen.getByRole('img', { name: /sent by bob/i })).toBeInTheDocument()
   })
 
-  it('tapping a row closes the drawer and opens the problem via navigation (no board light)', async () => {
+  it('tapping a row opens the problem paging over the queue order (no board light)', async () => {
     queueState = {
       status: 'loaded',
-      activeItems: [activeItem('a1', 'p1', 1)],
+      activeItems: [activeItem('a1', 'p1', 1), activeItem('a2', 'p2', 2)],
       doneItems: [],
       error: null,
     }
     renderDrawer()
     openDrawer()
-    fireEvent.click(await screen.findByText('ALPHA'))
+    // BRAVO is the second (Up next) row; tapping it opens p2 with the queue as the paging domain.
+    fireEvent.click(await screen.findByText('BRAVO'))
 
-    // The shared ?problem navigation is invoked with the source catalog id (KTD9 / R9)...
-    expect(onOpenProblem).toHaveBeenCalledWith('p1')
-    // ...and no queue mutation fired (tap is open-only; lighting stays the manual lightbulb —
-    // the component imports no BLE/light path at all).
+    // Opened with the source catalog id AND the ordered queue stack (so next/prev page the queue).
+    expect(onOpenProblem).toHaveBeenCalledWith(
+      'p2',
+      expect.arrayContaining([
+        expect.objectContaining({ source_catalog_id: 'p1' }),
+        expect.objectContaining({ source_catalog_id: 'p2' }),
+      ]),
+    )
+    // No queue mutation fired (tap is open-only; lighting stays the manual lightbulb).
     expect(checkOff).not.toHaveBeenCalled()
     expect(reorder).not.toHaveBeenCalled()
     expect(removeItem).not.toHaveBeenCalled()
