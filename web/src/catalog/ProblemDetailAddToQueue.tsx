@@ -10,7 +10,7 @@
 // queue — when a same-board session exists.
 
 import { useState } from 'react'
-import { ListChecks, ListVideo } from 'lucide-react'
+import { ListVideo } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useSessions } from '../sessions/sessionsStore'
@@ -65,9 +65,10 @@ function AddToQueueButton({ sessionId, sourceCatalogId, boardLayoutId }: AddToQu
   }
 
   if (queued) {
+    // Already queued: keep the same list icon (not a checkmark), tinted blue to read as "in queue".
     return (
       <Button variant="ghost" size="icon" aria-label="In queue" disabled>
-        <ListChecks className="size-5 text-success" />
+        <ListVideo className="size-5 text-primary" />
       </Button>
     )
   }
