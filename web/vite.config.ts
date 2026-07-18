@@ -10,6 +10,9 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
+    // Keep a single React instance so newly-added deps (e.g. @dnd-kit/*) can't be pre-bundled
+    // against a second copy — a duplicate React makes hooks throw "Invalid hook call".
+    dedupe: ['react', 'react-dom'],
   },
   plugins: [
     react(),
