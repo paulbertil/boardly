@@ -48,6 +48,10 @@ function problem(id: string, name: string): CatalogProblem {
 
 const list = [problem('a', 'First'), problem('b', 'Middle'), problem('c', 'Last')]
 
+// Queue-strip entries: a resolved climb, or an unresolved placeholder (not cached locally).
+const entry = (id: string, name: string) => ({ sourceCatalogId: id, problem: problem(id, name) })
+const placeholder = (id: string) => ({ sourceCatalogId: id, problem: null })
+
 // A controlled harness mirroring CatalogScreen: the URL (here, local state) owns the
 // shown problem; ProblemDetail pages by calling onNavigate. `displayed` is the paging
 // domain; the shown problem is resolved against it, falling back to `slab` (so a
@@ -167,20 +171,33 @@ describe('ProblemDetail', () => {
 
   it('renders the queue strip whenever the queue is non-empty, regardless of open origin', () => {
     // Viewing a climb NOT in the queue — the strip still shows (nothing highlighted).
-    vi.mocked(useActiveQueueProblems).mockReturnValue([problem('q1', 'Q-One'), problem('q2', 'Q-Two')])
+    vi.mocked(useActiveQueueProblems).mockReturnValue([entry('q1', 'Q-One'), entry('q2', 'Q-Two')])
     render(<Pager id="b" displayed={list} />)
     expect(screen.getByRole('region', { name: 'Queue' })).toBeInTheDocument()
     expect(screen.getByText('Q-One')).toBeInTheDocument()
     expect(screen.getByText('Q-Two')).toBeInTheDocument()
   })
 
+  it('shows an unresolved queued climb as a non-interactive placeholder (count matches the badge)', () => {
+    // A queued id not cached locally still appears — as a placeholder, not a tappable card — so the
+    // strip count stays in step with the queue badge/drawer. It is excluded from the pager hand-off.
+    vi.mocked(useActiveQueueProblems).mockReturnValue([entry('q1', 'Q-One'), placeholder('q2')])
+    const onPageOverQueue = vi.fn()
+    render(<Pager id="b" displayed={list} onPageOverQueue={onPageOverQueue} />)
+    expect(screen.getByLabelText('Queued climb — loading')).toBeInTheDocument()
+    // The placeholder is not a button, so only the resolved card can be tapped.
+    fireEvent.click(screen.getByRole('button', { name: /Q-One/ }))
+    // The hand-off stack contains only the resolved problem, not the placeholder.
+    expect(onPageOverQueue).toHaveBeenCalledWith('q1', [problem('q1', 'Q-One')])
+  })
+
   it('highlights the shown climb in the strip only when it is itself queued', () => {
     // Shown climb IS in the queue → its card is marked current (aria-current="true").
-    vi.mocked(useActiveQueueProblems).mockReturnValue([problem('b', 'Middle'), problem('c', 'Last')])
+    vi.mocked(useActiveQueueProblems).mockReturnValue([entry('b', 'Middle'), entry('c', 'Last')])
     const { rerender } = render(<Pager id="b" displayed={list} />)
     expect(screen.getByRole('button', { name: /Middle/ })).toHaveAttribute('aria-current', 'true')
     // Shown climb is NOT in the queue → no card is current.
-    vi.mocked(useActiveQueueProblems).mockReturnValue([problem('q1', 'Q-One'), problem('q2', 'Q-Two')])
+    vi.mocked(useActiveQueueProblems).mockReturnValue([entry('q1', 'Q-One'), entry('q2', 'Q-Two')])
     rerender(<Pager id="b" displayed={list} />)
     expect(
       screen.queryByRole('button', { name: /Q-One|Q-Two/, current: true }),
@@ -188,16 +205,15 @@ describe('ProblemDetail', () => {
   })
 
   it('hands paging off to the queue on a card tap (onPageOverQueue)', () => {
-    const queue = [problem('q1', 'Q-One'), problem('q2', 'Q-Two')]
-    vi.mocked(useActiveQueueProblems).mockReturnValue(queue)
+    vi.mocked(useActiveQueueProblems).mockReturnValue([entry('q1', 'Q-One'), entry('q2', 'Q-Two')])
     const onPageOverQueue = vi.fn()
     render(<Pager id="b" displayed={list} onPageOverQueue={onPageOverQueue} />)
     fireEvent.click(screen.getByRole('button', { name: /Q-Two/ }))
-    expect(onPageOverQueue).toHaveBeenCalledWith('q2', queue)
+    expect(onPageOverQueue).toHaveBeenCalledWith('q2', [problem('q1', 'Q-One'), problem('q2', 'Q-Two')])
   })
 
   it('falls back to plain navigation on a card tap when the host has no queue hand-off', () => {
-    vi.mocked(useActiveQueueProblems).mockReturnValue([problem('a', 'First'), problem('c', 'Last')])
+    vi.mocked(useActiveQueueProblems).mockReturnValue([entry('a', 'First'), entry('c', 'Last')])
     render(<Pager id="b" displayed={list} />)
     // No onPageOverQueue → onNavigate opens the climb (the harness swaps the shown problem).
     fireEvent.click(screen.getByRole('button', { name: /Last/ }))

@@ -8,7 +8,7 @@
 // recents snapshot when opened from the recents sheet) — a deep-linked problem the
 // active filters exclude is not in it, so prev/next disable and it shows standalone.
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { BadgeCheck, CheckCircle2, ChevronLeft, ChevronRight, Heart, Lightbulb, ListPlus, Repeat, Star } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
 import { SignInDialog } from '../auth/SignInDialog'
@@ -69,8 +69,13 @@ export function ProblemDetail({
   const swipeStart = useRef<{ x: number; y: number } | null>(null)
   const showThumbnails = useShowPreviews('catalog')
   // The board's active session queue (empty when no session targets this board) — the strip shows
-  // whenever it's non-empty, regardless of how the detail was opened.
-  const queueProblems = useActiveQueueProblems(board)
+  // whenever it's non-empty, regardless of how the detail was opened. Entries may be unresolved
+  // (not cached locally); the pager hand-off can only walk the resolved subset, so derive that.
+  const queueEntries = useActiveQueueProblems(board)
+  const queueStack = useMemo(
+    () => queueEntries.map((e) => e.problem).filter((p): p is CatalogProblem => Boolean(p)),
+    [queueEntries],
+  )
   const { toggleFavorite } = useFavorites()
   const { status } = useAuth()
   const signedIn = status !== 'signedOut'
@@ -344,15 +349,13 @@ export function ProblemDetail({
           scrolling up surfaces "up next". Tapping a card hands prev/next off to the queue's order
           (onPageOverQueue) where the host supports it, else just opens the climb. */}
       <div className="snap-start space-y-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-2">
-        {queueProblems.length > 0 && (
+        {queueEntries.length > 0 && (
           <ProblemDetailQueueStrip
-            items={queueProblems}
+            items={queueEntries}
             currentId={currentId}
             board={board}
             showThumbnail={showThumbnails}
-            onSelect={(id) =>
-              onPageOverQueue ? onPageOverQueue(id, queueProblems) : onNavigate(id)
-            }
+            onSelect={(id) => (onPageOverQueue ? onPageOverQueue(id, queueStack) : onNavigate(id))}
           />
         )}
         <BetaVideos sourceCatalogId={currentId} />
