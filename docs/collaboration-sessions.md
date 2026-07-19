@@ -125,10 +125,46 @@ Backend: [`supabase/migrations/0015_session_queue.sql`](../supabase/migrations/0
   change, and reconnect, so a dropped nudge never strands a stale queue.
 
 Client: `sessions/queueStore.ts` (reactive store + optimistic mutations), `sessions/QueueDrawer.tsx`
-+ `QueueItemRow.tsx` (the drawer, opened from `SessionBar` / `SessionPill`),
-`sessions/useDragReorder.ts` (touch drag; per-row up/down controls are the pointer/keyboard path),
-`catalog/ProblemDetailAddToQueue.tsx` (add from a problem), `catalog/useSwipeToQueue.ts` (swipe a
-catalog row left to add). The sent-marker on a queue row reuses `useMemberSenders`.
++ `QueueItemRow.tsx` (the drawer, opened from the catalog `SessionBar`; Edit mode reorders via the
+dnd-kit `components/ui/sortable.tsx`, and a row swipes left to remove). Add entry points:
+`catalog/ProblemDetailAddToQueue.tsx` (the detail's blue queue icon — tap to add, tap again to
+remove) and `catalog/useSwipeToQueue.ts` (swipe a catalog row left to add). Membership is surfaced
+on the catalog row as a soft-blue leading rail (`CatalogRow`, driven by a `queuedIds` set), and the
+sent-marker on a queue row reuses `useMemberSenders`. Queue confirmations toast **top-center**
+(`sessions/queueToast.ts`) so they clear the bottom nav/FAB controls; successful add/remove stay
+silent (the rail + count convey them), only failures toast.
+
+### Surfacing on the problem detail — the paging decision (load-bearing)
+
+The problem-detail drawer shows a horizontal **queue strip** above the beta section, and it is a
+deliberate two-control model — one we chose over having a single control mean different things by
+context. The strip reads the **live** queue (`sessions/useActiveQueueProblems.ts`, the no-prop-drill
+idiom) so it is independent of the pager domain and appears on *every* detail host (catalog, logbook,
+list) whenever the board's session queue is non-empty — even on a climb that isn't itself queued.
+
+Two navigators, each with one fixed meaning:
+
+- **prev/next chevrons + board-swipe** walk the *pager domain* — the list you opened the drawer from
+  (the queue when opened from the queue, else the catalog/recents/list).
+- **the strip** always walks the *queue*. Tapping a card **hands paging off to the queue**:
+  `useProblemDrawer.pageOver` swaps the pager domain to the queue's order, so from then on the
+  chevrons follow the queue too. Only hosts with a swappable domain (CatalogScreen) pass
+  `onPageOverQueue`; elsewhere a card tap just opens the climb.
+
+This is why there is no `fromQueue`/origin flag on the detail: the strip's visibility keys on the
+live queue, not on how the drawer was opened.
+
+```mermaid
+flowchart TD
+    Open[Open problem detail] --> Q{Board session<br/>queue non-empty?}
+    Q -- no --> NoStrip[No strip · chevrons page the source list]
+    Q -- yes --> Strip[Show queue strip · chevrons still page the source list]
+    Strip --> Tap{User action}
+    Tap -- prev/next or board-swipe --> Domain[Page the current pager domain]
+    Tap -- tap a strip card --> Host{Host supports<br/>onPageOverQueue?}
+    Host -- yes CatalogScreen --> Handoff[pageOver: swap pager domain → queue<br/>chevrons now follow the queue]
+    Host -- no logbook/list --> NavOnly[Open that climb · domain unchanged]
+```
 
 **Persistence dependency (load-bearing):** `session_queue.session_id` is `ON DELETE CASCADE`,
 which never fires today (sessions are only soft-deleted). If the deferred hard-delete sweep of
