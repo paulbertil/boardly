@@ -8,7 +8,7 @@
 // recents snapshot when opened from the recents sheet) — a deep-linked problem the
 // active filters exclude is not in it, so prev/next disable and it shows standalone.
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { BadgeCheck, CheckCircle2, ChevronLeft, ChevronRight, Heart, Lightbulb, ListPlus, Repeat, Star } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
 import { SignInDialog } from '../auth/SignInDialog'
@@ -29,6 +29,10 @@ import { useFavorites } from './favoritesStore'
 import { LogAscentSheet, type LogTarget } from '../logbook/LogAscentSheet'
 import { useAddToList } from '../lists/useAddToList'
 import { BetaVideos } from '../beta/BetaVideos'
+import { ProblemDetailAddToQueue } from './ProblemDetailAddToQueue'
+import { ProblemDetailQueueStrip } from './ProblemDetailQueueStrip'
+import { useActiveQueueProblems } from '../sessions/useActiveQueueProblems'
+import { useShowPreviews } from './previewsStore'
 import { Button } from '@/components/ui/button'
 
 interface ProblemDetailProps {
@@ -45,6 +49,11 @@ interface ProblemDetailProps {
   highlightHolds?: Set<string>
   /** Page to another problem (replace-navigates ?problem). */
   onNavigate: (id: string) => void
+  /** Tap a queue-strip card: page to `id` AND hand prev/next off to the queue's order (`stack`).
+   *  Only hosts with a swappable pager domain pass this (CatalogScreen) — and it doubles as the
+   *  gate for the queue strip: the strip renders only where this is provided, so the logbook and
+   *  list-detail hosts (which don't wire it) show no queue strip. */
+  onPageOverQueue?: (id: string, stack: CatalogProblem[]) => void
 }
 
 export function ProblemDetail({
@@ -56,8 +65,18 @@ export function ProblemDetail({
   sentIds,
   highlightHolds,
   onNavigate,
+  onPageOverQueue,
 }: ProblemDetailProps) {
   const swipeStart = useRef<{ x: number; y: number } | null>(null)
+  const showThumbnails = useShowPreviews('catalog')
+  // The board's active session queue (empty when no session targets this board) — the strip shows
+  // whenever it's non-empty, regardless of how the detail was opened. Entries may be unresolved
+  // (not cached locally); the pager hand-off can only walk the resolved subset, so derive that.
+  const queueEntries = useActiveQueueProblems(board)
+  const queueStack = useMemo(
+    () => queueEntries.map((e) => e.problem).filter((p): p is CatalogProblem => Boolean(p)),
+    [queueEntries],
+  )
   const { toggleFavorite } = useFavorites()
   const { status } = useAuth()
   const signedIn = status !== 'signedOut'
@@ -271,6 +290,7 @@ export function ProblemDetail({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
+          <ProblemDetailAddToQueue sourceCatalogId={currentId} boardLayoutId={board.layoutId} />
           <Button
             variant="ghost"
             size="icon"
@@ -325,8 +345,21 @@ export function ProblemDetail({
       </div>
       </div>
 
-      {/* Below the fold — its own snap target, revealed by scrolling/dragging up. */}
-      <div className="snap-start pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-2">
+      {/* Below the fold — its own snap target, revealed by scrolling/dragging up. On the catalog
+          host (the one that wires onPageOverQueue), a non-empty session queue puts the queue strip
+          at the top of this page (above beta) so scrolling up surfaces "up next"; tapping a card
+          hands prev/next off to the queue's order. The logbook/list hosts don't wire the hand-off,
+          so they render no strip. */}
+      <div className="snap-start space-y-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-2">
+        {onPageOverQueue && queueEntries.length > 0 && (
+          <ProblemDetailQueueStrip
+            items={queueEntries}
+            currentId={currentId}
+            board={board}
+            showThumbnail={showThumbnails}
+            onSelect={(id) => onPageOverQueue(id, queueStack)}
+          />
+        )}
         <BetaVideos sourceCatalogId={currentId} />
       </div>
 

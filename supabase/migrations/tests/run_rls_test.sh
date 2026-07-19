@@ -63,6 +63,10 @@ begin
   if to_regclass('public.session_members') is not null then
     execute 'grant select on public.sessions, public.session_members to anon, authenticated';
   end if;
+  -- 0015 chain: the queue RLS assertions insert/select/update session_queue as `authenticated`.
+  if to_regclass('public.session_queue') is not null then
+    execute 'grant select, insert, update, delete on public.session_queue to anon, authenticated';
+  end if;
 end $$;
 SQL
 
@@ -118,5 +122,15 @@ run_case "$HERE/0014_session_end_realtime_rls.sql" \
   "$HERE/../0007_collaboration_sessions.sql" \
   "$HERE/stub_realtime.sql" \
   "$HERE/../0014_session_end_realtime.sql"
+
+# 0015: session queue — the queue table + membership RLS + attribution pinning + the
+# session-scoped reorder RPC + the queue-changed broadcast trigger. Needs sessions /
+# session_members / is_session_member (0007), set_updated_at (0002), and the realtime stub
+# (realtime.send) applied before 0015.
+run_case "$HERE/0015_session_queue_rls.sql" \
+  "$HERE/../0002_logbook_sync.sql" \
+  "$HERE/../0007_collaboration_sessions.sql" \
+  "$HERE/stub_realtime.sql" \
+  "$HERE/../0015_session_queue.sql"
 
 echo "✅ ALL RLS CASES PASSED"

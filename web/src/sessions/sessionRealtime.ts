@@ -20,6 +20,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js'
 import { toast } from 'sonner'
 import { supabase } from '../supabase/client'
 import { refreshMemberAscents, removeMemberFromProjection } from './memberAscentsStore'
+import { refreshQueue } from './queueStore'
 import {
   endActiveSessionLocally,
   getSessionsSnapshot,
@@ -36,6 +37,9 @@ const NUDGE_EVENT = 'ascents-changed'
 const MEMBER_JOINED_EVENT = 'member-joined'
 const MEMBER_LEFT_EVENT = 'member-left'
 const SESSION_ENDED_EVENT = 'session-ended'
+// Must match 0015's session_queue trigger: realtime.send(... event => 'queue-changed'). A data-free
+// doorbell — the queue itself still arrives only through queueStore's direct RLS select (KTD5).
+const QUEUE_CHANGED_EVENT = 'queue-changed'
 
 interface NudgePayload {
   author?: string
@@ -179,7 +183,25 @@ export function activateSessionRealtime(sessionId: string | null): void {
         if (myToken !== activationToken) return
         onSessionEnded()
       })
-      ch.subscribe()
+      // A queue write broadcasts a data-free 'queue-changed' nudge; refetch the queue. refreshQueue
+      // is debounced internally, so a reorder's burst of N nudges collapses to one refetch (KTD4) —
+      // no debounce of our own here (unlike the ascents nudge, whose debounce lives in this module).
+      ch.on('broadcast', { event: QUEUE_CHANGED_EVENT }, () => {
+        if (myToken !== activationToken) return
+        refreshQueue()
+      })
+      // Broadcast is best-effort with no replay, so a 'queue-changed' nudge dropped while the socket
+      // was down would strand a stale queue. On reconnect (a second+ SUBSCRIBED after a drop — the
+      // first is the initial join, already covered by the store's activation fetch), reconcile it
+      // (KTD5). memberAscents reconciles on foreground/active-session change instead; the queue adds
+      // reconnect here because its nudge, not just its pull, can be missed mid-disconnect.
+      let hasSubscribed = false
+      ch.subscribe((status) => {
+        if (myToken !== activationToken) return
+        if (status !== 'SUBSCRIBED') return
+        if (hasSubscribed) refreshQueue()
+        hasSubscribed = true
+      })
       channel = ch
     })
     .catch(() => {}) // getSession/subscribe failure → stay on the pull model (R6)

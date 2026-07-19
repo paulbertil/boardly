@@ -6,6 +6,8 @@
 import { useCallback, useRef, useState } from 'react'
 import { MoreHorizontal, Plus, RefreshCw, Share2, Users, X } from 'lucide-react'
 import type { CatalogBoardDef } from '../board/boards'
+import type { CatalogProblem } from './catalogSync'
+import { QueueDrawer } from '../sessions/QueueDrawer'
 import { boardShortLabel } from '../lists/listsTypes'
 import { useAuth } from '../auth/AuthProvider'
 import {
@@ -29,7 +31,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 
-export function SessionBar({ board }: { board: CatalogBoardDef }) {
+// SessionBar only ever renders under the board catalog route. The queue entry drives the shared
+// ?problem drawer through the pager opener CatalogScreen hands down (`onOpenProblem`), which
+// snapshots the queue as the paging domain so the detail view pages in queue order (KTD9).
+export interface SessionBarProps {
+  board: CatalogBoardDef
+  /** Open the ?problem detail pager on `id`, paging over `stack` (the queue's order). */
+  onOpenProblem: (id: string, stack: CatalogProblem[]) => void
+}
+
+export function SessionBar({ board, onOpenProblem }: SessionBarProps) {
   const { activeSession } = useSessions()
   const { status: authStatus } = useAuth()
   const signedIn = authStatus !== 'signedOut'
@@ -47,7 +58,7 @@ export function SessionBar({ board }: { board: CatalogBoardDef }) {
   return (
     <>
       {activeForThisBoard ? (
-        <ActiveBar board={board} onShare={() => setShareOpen(true)} />
+        <ActiveBar board={board} onShare={() => setShareOpen(true)} onOpenProblem={onOpenProblem} />
       ) : (
         <StartBar board={board} signedIn={signedIn} onStarted={() => setShareOpen(true)} />
       )}
@@ -117,7 +128,15 @@ function StartBar({
   )
 }
 
-function ActiveBar({ board, onShare }: { board: CatalogBoardDef; onShare: () => void }) {
+function ActiveBar({
+  board,
+  onShare,
+  onOpenProblem,
+}: {
+  board: CatalogBoardDef
+  onShare: () => void
+  onOpenProblem: (id: string, stack: CatalogProblem[]) => void
+}) {
   const { activeSession, roster, selfId } = useSessions()
   const [refreshing, setRefreshing] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -164,6 +183,7 @@ function ActiveBar({ board, onShare }: { board: CatalogBoardDef; onShare: () => 
       </AvatarGroup>
 
       <div className="ml-auto flex items-center gap-1">
+        <QueueDrawer board={board} compact onOpenProblem={onOpenProblem} />
         <Button variant="ghost" size="icon" className="size-8" onClick={() => void refresh()} aria-label="Refresh members">
           <RefreshCw className={cn('size-4', refreshing && 'animate-spin')} />
         </Button>

@@ -127,6 +127,89 @@ and the join RPC unchanged.
   (`facingMode: 'environment'`); re-acquired on foreground (iOS standalone PWAs freeze the stream
   when backgrounded).
 
+## Session queue (playlist)
+
+A session also carries a shared, ordered **queue** of problems the crew wants to try — its
+short-term memory for "what's next", distinct from the sent-status projection above. Any member
+adds, reorders, checks off, and removes; changes push to co-members over the session's existing
+private Broadcast channel.
+
+Backend: [`supabase/migrations/0015_session_queue.sql`](../supabase/migrations/0015_session_queue.sql).
+
+- **`session_queue`** — one row per queued problem occurrence: `session_id` (FK, cascade),
+  `source_catalog_id`, `board_layout_id`, `added_by`, `position`, lifecycle `done_at` / `done_by`,
+  soft-delete `deleted`. Modeled on `list_problems` (0003) plus ordering and a done lifecycle.
+- **Lifecycle** — *active* (`done_at` null) / *done* (`done_at` set, kept in a "Done" group for
+  the life of the session) / *removed* (`deleted`). A partial unique index on
+  `(session_id, source_catalog_id) WHERE deleted = false AND done_at IS NULL` makes a problem
+  active at most once, while allowing a checked-off problem to be re-added as a fresh active item.
+- **Ordering** — integer `position` among active rows; every read sorts `position, created_at,
+  id` (a deterministic tiebreak, so an add racing a reorder still resolves to one identical order
+  on every client). Reorder is one `SECURITY DEFINER` RPC
+  `reorder_session_queue(p_session_id, p_ordered_ids)` that rewrites positions in a single
+  transaction. Because a DEFINER RPC bypasses RLS, it both checks caller membership **and**
+  constrains the write to `session_id = p_session_id` — a member of one session cannot reorder
+  another's rows.
+- **Attribution is server-authoritative** — `added_by` is pinned on INSERT and immutable on
+  UPDATE; `done_by` is pinned to the checker at check-off (a `BEFORE UPDATE` trigger). A member
+  cannot spoof who added or checked off an item.
+- **RLS** — members-only read/write via `is_session_member`; no DELETE policy (removal is a
+  soft-delete UPDATE). Access goes **direct through RLS** (no projection RPC) — the queue has no
+  cross-user privacy constraint, unlike `ascents`.
+- **Realtime** — a data-free `queue-changed` broadcast on the row's own `session:<id>` channel
+  (reusing 0012's `realtime.messages` receive policy — no new policy); clients debounce-refetch.
+  Because Broadcast is best-effort, the store also reconciles on foreground, active-session
+  change, and reconnect, so a dropped nudge never strands a stale queue.
+
+Client: `sessions/queueStore.ts` (reactive store + optimistic mutations), `sessions/QueueDrawer.tsx`
++ `QueueItemRow.tsx` (the drawer, opened from the catalog `SessionBar`; Edit mode reorders via the
+dnd-kit `components/ui/sortable.tsx`, and a row swipes left to remove). Add entry points:
+`catalog/ProblemDetailAddToQueue.tsx` (the detail's blue queue icon — tap to add, tap again to
+remove) and `catalog/useSwipeToQueue.ts` (swipe a catalog row left to add). Membership is surfaced
+on the catalog row as a soft-blue leading rail (`CatalogRow`, driven by a `queuedIds` set), and the
+sent-marker on a queue row reuses `useMemberSenders`. Queue confirmations toast **top-center**
+(`sessions/queueToast.ts`) so they clear the bottom nav/FAB controls; successful add/remove stay
+silent (the rail + count convey them), only failures toast.
+
+### Surfacing on the problem detail — the paging decision (load-bearing)
+
+The problem-detail drawer shows a horizontal **queue strip** above the beta section, and it is a
+deliberate two-control model — one we chose over having a single control mean different things by
+context. The strip reads the **live** queue (`sessions/useActiveQueueProblems.ts`, the no-prop-drill
+idiom), so it is independent of the pager domain and shows whenever the board's session queue is
+non-empty — even on a climb that isn't itself queued. It is **catalog-only**: the strip renders only
+on the host that wires the queue paging hand-off (`onPageOverQueue`, from `CatalogScreen`), so the
+logbook and list-detail drawers — which reuse `ProblemDetail` but don't wire it — show no strip. That
+one prop is both the hand-off and the strip's visibility gate; there is no separate flag.
+
+Two navigators, each with one fixed meaning:
+
+- **prev/next chevrons + board-swipe** walk the *pager domain* — the list you opened the drawer from
+  (the queue when opened from the queue, else the catalog/recents/list).
+- **the strip** always walks the *queue*. Tapping a card **hands paging off to the queue**:
+  `useProblemDrawer.pageOver` swaps the pager domain to the queue's order, so from then on the
+  chevrons follow the queue too.
+
+This is why there is no `fromQueue`/origin flag on the detail: the strip's visibility keys on the
+live queue plus the host's hand-off, not on how the drawer was opened.
+
+```mermaid
+flowchart TD
+    Open[Open problem detail] --> Host{Host wires onPageOverQueue?<br/>(catalog only)}
+    Host -- no logbook/list --> NoStrip1[No strip · chevrons page the source list]
+    Host -- yes --> Q{Board session<br/>queue non-empty?}
+    Q -- no --> NoStrip2[No strip · chevrons page the source list]
+    Q -- yes --> Strip[Show queue strip · chevrons still page the source list]
+    Strip --> Tap{User action}
+    Tap -- prev/next or board-swipe --> Domain[Page the current pager domain]
+    Tap -- tap a strip card --> Handoff[pageOver: swap pager domain → queue<br/>chevrons now follow the queue]
+```
+
+**Persistence dependency (load-bearing):** `session_queue.session_id` is `ON DELETE CASCADE`,
+which never fires today (sessions are only soft-deleted). If the deferred hard-delete sweep of
+expired sessions ever ships, it must preserve or relocate queue rows first — a future sessions
+logbook is intended to read queue history, and the cascade would otherwise erase it.
+
 ## Security posture (read before changing)
 
 - **`invite_token` is a bearer capability.** Anyone holding the link/QR can join. v1 revokes
@@ -141,10 +224,11 @@ and the join RPC unchanged.
 
 ## v1 / v2 boundary
 
-**v1 (this):** on-demand pull (open / foreground / manual refresh); static roster;
+**v1 (this):** on-demand pull (open / foreground / manual refresh) for the status projection;
+realtime `queue-changed` / sent-status nudges; a shared session queue (playlist); static roster;
 board-scoped; status-only projection.
 
-**Deferred to v2:** realtime cross-member updates and online-now presence; shared "crew
-projects" list; friend graph / standing groups; multi-board sessions; iOS; member avatars;
-a scheduled hard-delete sweep of expired sessions (v1 makes them inert via the RPC guards);
-`invite_token` rotation.
+**Deferred to v2:** online-now presence; a sessions logbook (post-session history, reading queue
+rows); friend graph / standing groups; multi-board sessions; iOS; member avatars; a scheduled
+hard-delete sweep of expired sessions (v1 makes them inert via the RPC guards — a sweep must
+preserve `session_queue` rows first); `invite_token` rotation.
