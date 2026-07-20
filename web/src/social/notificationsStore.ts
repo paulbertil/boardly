@@ -118,14 +118,11 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
-function getSnapshot(): NotificationsState {
-  return state
-}
-
+/** Snapshot for useSyncExternalStore and for tests/imperative callers (one function, not two). */
 export function getNotificationsSnapshot(): NotificationsState {
   return state
 }
 
 export function useNotifications(): NotificationsState {
-  return useSyncExternalStore(subscribe, getSnapshot)
+  return useSyncExternalStore(subscribe, getNotificationsSnapshot)
 }

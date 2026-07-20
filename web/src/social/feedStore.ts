@@ -12,9 +12,9 @@
 //   • error   — an online fetch failed with nothing cached
 
 import { useSyncExternalStore } from 'react'
-import { supabase } from '../supabase/client'
 import { currentUserId } from './currentUser'
-import { sendFromRow, type SendItem, type SendRow } from './socialTypes'
+import { fetchSendsPage, SENDS_PAGE } from './sendsPage'
+import type { SendItem } from './socialTypes'
 
 export type FeedStatus = 'idle' | 'loading' | 'loaded' | 'stale' | 'offline' | 'error'
 
@@ -29,7 +29,6 @@ export interface FeedState {
   fetchedAt: number | null
 }
 
-const PAGE = 30
 const CACHE_KEY = 'feedCacheV1'
 
 const EMPTY: FeedState = { status: 'idle', sends: [], done: false, loadingMore: false, fetchedAt: null }
@@ -63,7 +62,7 @@ function readCache(userId: string): CacheShape | null {
 
 function writeCache(userId: string, sends: SendItem[], fetchedAt: number): void {
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ userId, sends: sends.slice(0, PAGE), fetchedAt }))
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ userId, sends: sends.slice(0, SENDS_PAGE), fetchedAt }))
   } catch {
     // Best-effort; a full/again-private-mode storage just means no offline paint.
   }
@@ -118,16 +117,7 @@ export function syncFeedIdentity(userId: string | null): void {
   }
 }
 
-async function fetchPage(cursor: SendItem | null): Promise<SendItem[] | null> {
-  if (!supabase) return []
-  const { data, error } = await supabase.rpc('get_follow_feed', {
-    p_limit: PAGE,
-    p_before_first_sent: cursor?.firstSentAt ?? null,
-    p_before_id: cursor?.ascentId ?? null,
-  })
-  if (error) return null
-  return ((data ?? []) as SendRow[]).map(sendFromRow)
-}
+const fetchPage = (cursor: SendItem | null) => fetchSendsPage('get_follow_feed', cursor)
 
 /**
  * Load the feed: paint the user-keyed cache immediately (if any), then fetch the fresh first
@@ -137,14 +127,14 @@ async function fetchPage(cursor: SendItem | null): Promise<SendItem[] | null> {
  */
 export async function loadFeed(): Promise<void> {
   const token = ++loadToken
-  const userId = await currentUserId()
-  if (!supabase || !userId) {
+  const userId = await currentUserId() // null when signed out / unconfigured
+  if (!userId) {
     setState({ status: 'loaded', sends: [], done: true, fetchedAt: null })
     return
   }
   const cached = readCache(userId)
   if (cached) {
-    setState({ status: 'stale', sends: cached.sends, done: cached.sends.length < PAGE, loadingMore: false, fetchedAt: cached.fetchedAt })
+    setState({ status: 'stale', sends: cached.sends, done: cached.sends.length < SENDS_PAGE, loadingMore: false, fetchedAt: cached.fetchedAt })
   } else {
     setState({ status: 'loading', sends: [], done: false, loadingMore: false, fetchedAt: null })
   }
@@ -159,7 +149,7 @@ export async function loadFeed(): Promise<void> {
   }
   const now = Date.now()
   writeCache(userId, rows, now)
-  setState({ status: 'loaded', sends: rows, done: rows.length < PAGE, fetchedAt: now })
+  setState({ status: 'loaded', sends: rows, done: rows.length < SENDS_PAGE, fetchedAt: now })
 }
 
 /** Load the next keyset page. No-op while offline/empty OR while a page is already in flight
@@ -175,7 +165,7 @@ export async function loadMoreFeed(): Promise<void> {
     setState({ loadingMore: false })
     return
   }
-  setState({ sends: [...state.sends, ...rows], done: rows.length < PAGE, status: 'loaded', loadingMore: false })
+  setState({ sends: [...state.sends, ...rows], done: rows.length < SENDS_PAGE, status: 'loaded', loadingMore: false })
 }
 
 function navigatorOffline(): boolean {
@@ -189,16 +179,13 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
-function getSnapshot(): FeedState {
-  return state
-}
-
+/** Snapshot for useSyncExternalStore and for tests/imperative callers (one function, not two). */
 export function getFeedSnapshot(): FeedState {
   return state
 }
 
 export function useFeed(): FeedState {
-  return useSyncExternalStore(subscribe, getSnapshot)
+  return useSyncExternalStore(subscribe, getFeedSnapshot)
 }
 
 /** Test reset. */

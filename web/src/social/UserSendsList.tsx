@@ -7,14 +7,12 @@
 // Keyset-paged on (first_sent_at, id): "Load more" passes the last row's cursor. Read-only.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { supabase } from '../supabase/client'
 import { boardByLayoutId } from '../board/boards'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { relativeTime } from './relativeTime'
-import { sendFromRow, type SendItem, type SendRow } from './socialTypes'
-
-const PAGE = 30
+import { fetchSendsPage, SENDS_PAGE } from './sendsPage'
+import type { SendItem } from './socialTypes'
 
 type LoadState = 'loading' | 'loaded' | 'error'
 
@@ -27,17 +25,7 @@ export function UserSendsList({ userId }: { userId: string }) {
   const reqId = useRef(0)
 
   const fetchPage = useCallback(
-    async (cursor: SendItem | null): Promise<SendItem[] | null> => {
-      if (!supabase) return []
-      const { data, error } = await supabase.rpc('get_user_sends', {
-        p_target: userId,
-        p_limit: PAGE,
-        p_before_first_sent: cursor?.firstSentAt ?? null,
-        p_before_id: cursor?.ascentId ?? null,
-      })
-      if (error) return null
-      return ((data ?? []) as SendRow[]).map(sendFromRow)
-    },
+    (cursor: SendItem | null) => fetchSendsPage('get_user_sends', cursor, { p_target: userId }),
     [userId],
   )
 
@@ -54,7 +42,7 @@ export function UserSendsList({ userId }: { userId: string }) {
       }
       setSends(rows)
       setStatus('loaded')
-      setDone(rows.length < PAGE)
+      setDone(rows.length < SENDS_PAGE)
     })
   }, [fetchPage])
 
@@ -67,7 +55,7 @@ export function UserSendsList({ userId }: { userId: string }) {
     setLoadingMore(false)
     if (id !== reqId.current || rows === null) return
     setSends((prev) => [...prev, ...rows])
-    setDone(rows.length < PAGE)
+    setDone(rows.length < SENDS_PAGE)
   }
 
   if (status === 'loading') {
