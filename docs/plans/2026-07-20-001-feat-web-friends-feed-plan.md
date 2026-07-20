@@ -307,8 +307,8 @@ Storage migration first (everything depends on the columns/tables/trigger/helper
 - **Goal:** Document the subsystem and wire the feature into app navigation.
 - **Requirements:** — (tail).
 - **Dependencies:** U3–U7.
-- **Files:** `docs/social-graph.md` (new); edits to `docs/README.md`, `CONTEXT.md` (links only, per doc discipline); app nav/tab wiring for feed + discovery + notifications entry points.
-- **Approach:** Write `docs/social-graph.md` covering the follow state machine, the pull-feed + projection-core design, the block predicate, `first_sent_at`, and the privacy cohorts. Link (don't restate) from `docs/README.md` and `CONTEXT.md`. Add the top-level nav entry points.
+- **Files:** `docs/social-graph.md` (new); edits to `docs/README.md`, `CONTEXT.md` (links only, per doc discipline); `web/src/auth/AccountMenu.tsx` (nav entry points + unread badge).
+- **Approach:** Write `docs/social-graph.md` covering the follow state machine, the pull-feed + projection-core design, the block predicate, `first_sent_at`, and the privacy cohorts. Link (don't restate) from `docs/README.md` and `CONTEXT.md`. **Nav:** the bottom bar is at capacity (Boards/Logbook/Lists/Settings/Search), and the social surfaces are account-scoped, so the entry points live in the **account menu** (`AccountMenu`) — Feed, Find people, Notifications, View profile — with an **unread badge on the header avatar** driven by `notificationsStore.badgeCount`. A dedicated bottom-bar Feed tab is possible future nav polish.
 - **Verification:** Docs present and linked; nav reaches feed/discovery/notifications/profile; no subsystem restated across files.
 
 ---
