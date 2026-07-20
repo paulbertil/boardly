@@ -14,6 +14,7 @@
 //   /settings                → SettingsScreen (global; appearance/theme)
 //   /board/$layoutId/catalog → CatalogScreen  (search params: see catalogSearch.ts)
 //   /u/$handle               → ProfileScreen  (a user's follow-feed profile)
+//   /people                  → DiscoverScreen (search + co-members + follow-back)
 //
 // The tree is built by a factory so tests can spin up an isolated memory-history
 // router without reusing route objects already bound to the browser router.
@@ -38,6 +39,7 @@ import { ListDetailScreen } from './lists/ListDetailScreen'
 import { CatalogScreen } from './catalog/CatalogScreen'
 import { JoinSession } from './sessions/JoinSession'
 import { ProfileScreen } from './social/ProfileScreen'
+import { DiscoverScreen } from './social/DiscoverScreen'
 import { boardByLayoutId } from './board/boards'
 import { getActiveBoardId, getAddedBoardIds } from './board/boardStore'
 import { catalogNavTarget } from './catalog/catalogNav'
@@ -150,6 +152,13 @@ function buildRouteTree() {
     component: ProfileScreen,
   })
 
+  // Discovery: search + co-member suggestions + follow-back (U4).
+  const peopleRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/people',
+    component: DiscoverScreen,
+  })
+
   return rootRoute.addChildren([
     indexRoute,
     boardsRoute,
@@ -161,6 +170,7 @@ function buildRouteTree() {
     catalogRoute,
     joinSessionRoute,
     profileRoute,
+    peopleRoute,
   ])
 }
 

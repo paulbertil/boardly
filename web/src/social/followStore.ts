@@ -41,6 +41,17 @@ export function getEdge(id: string): EdgeState {
   return edges.get(id) ?? UNKNOWN
 }
 
+/**
+ * Prime the edge toward `id` from a list read that already carries it (search_profiles returns
+ * edge_status per row), so the RelationshipButton renders the right label with no extra
+ * round-trip. Never downgrades a locally-known optimistic state: skips if an edge is already
+ * cached (a live follow/unfollow in flight must win over a stale list snapshot).
+ */
+export function seedEdge(id: string, status: EdgeStatus): void {
+  if (edges.has(id)) return
+  setEdge(id, { status, blocked: false })
+}
+
 async function currentUserId(): Promise<string | null> {
   if (!supabase) return null
   const { data } = await supabase.auth.getSession()
