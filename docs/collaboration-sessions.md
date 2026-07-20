@@ -149,18 +149,29 @@ Backend: [`supabase/migrations/0016_session_resume.sql`](../supabase/migrations/
   adopt). It **awaits** the server reconcile (`refreshActiveSession`) and returns `{ live }` so the
   caller navigates only when the session is still live; a dead-on-arrival session (ended/expired
   between list and tap) is retired and returns `{ live: false }`.
-- **`shell/MyBoards.tsx`** — the **"Resume session"** list, rendered only when signed-in with no
-  active session (the idle surface, above "Join a session"). Fetches on mount and self-heals on
-  foreground (`visibilitychange`) + reconnect (`online`); renders nothing while empty/in-flight
-  (R5). Tapping a row awaits `resumeSession`: on `{ live: true }` it lands in the board catalog; on
-  `{ live: false }` it drops the row and shows an inline "That session has ended" notice instead of
-  bouncing the user out of a catalog it just entered. No realtime, no presence, no per-candidate
-  roster fetch — on-demand pull only, matching Sessions v1.
+- **`sessions/useResumableSessions.ts`** — the shared fetch-and-adopt hook consumed by both surfaces
+  below. Owns the `signedIn && !activeSession` gating, the `visibilitychange` + `online` self-heal,
+  the empty→empty no-op guard, the dead-on-arrival branch, and the post-resume `navigateToSessionBoard`
+  call. Optional `boardLayoutId` narrows the list to a single board (used by SessionBar). Explicit
+  tap only — the hook never auto-adopts (R1).
+- **`sessions/ResumableSessionRow.tsx`** — the presentational one-row button (session name + board
+  name + "Resume"/"Resuming…" pill). Accepts a `className` override so callers can skin it for their
+  chrome (card in MyBoards, slim in-bar in SessionBar).
+- **`shell/MyBoards.tsx`** — the **"Resume session"** list across ALL boards, rendered only when
+  signed-in with no active session (the idle surface, above "Join a session"). Consumes
+  `useResumableSessions()` with no filter. Ended notice is a card-style block.
+- **`catalog/SessionBar.tsx`** — in-context Resume for **this board**: when idle on a catalog and a
+  live session exists on the server for that same board (e.g. started on another device), stacks the
+  Resume row(s) above the StartBar in the same slim chrome family. Consumes
+  `useResumableSessions({ boardLayoutId: board.layoutId })`. Ended notice is a slim in-bar row.
+  StartBar (start/join) stays visible below, so a stale/wrong-crew Resume never blocks starting fresh.
 - **`sessions/sessionNav.ts`** — `navigateToSessionBoard(navigate, session)`, the single canonical
-  "session → board catalog" landing shared by `JoinSession` (post-join) and `MyBoards`
-  (post-resume) so the two can't drift. Resolves the board from the static catalog by layout id
-  (no board-add step needed) and falls back to `/boards` for a board this build doesn't ship —
-  never route a session tap through the fallback-less board-browse `onActivated`.
+  "session → board catalog" landing shared by `JoinSession` (post-join), `MyBoards` (post-resume),
+  and `SessionBar` (post-in-context-resume) so all three can't drift. Resolves the board from the
+  static catalog by layout id (no board-add step needed), **activates the board** (promotes it to
+  the MRU + persisted `activeBoard` pointer so the device's active board and the URL-scoped catalog
+  don't silently disagree), and falls back to `/boards` for a board this build doesn't ship — never
+  route a session tap through the fallback-less board-browse `onActivated`.
 
 Non-goals (v1): realtime "you have a new session" push, auto-resume on sign-in (explicit tap only),
 iOS, and rejoining an *ended* session (ended = gone).

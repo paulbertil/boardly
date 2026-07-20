@@ -4,7 +4,7 @@
 // DIFFERENT board is active it renders nothing (the global pill surfaces that one).
 
 import { useCallback, useRef, useState } from 'react'
-import { MoreHorizontal, Plus, RefreshCw, Share2, Users, X } from 'lucide-react'
+import { MoreHorizontal, Plus, Share2, Users, X } from 'lucide-react'
 import type { CatalogBoardDef } from '../board/boards'
 import type { CatalogProblem } from './catalogSync'
 import { QueueDrawer } from '../sessions/QueueDrawer'
@@ -14,12 +14,12 @@ import {
   createSession,
   endSession,
   leaveSession,
-  refreshActiveSession,
   removeMember,
   renameSession,
   useSessions,
 } from '../sessions/sessionsStore'
-import { refreshMemberAscents } from '../sessions/memberAscentsStore'
+import { useResumableSessions } from '../sessions/useResumableSessions'
+import { ResumableSessionRow } from '../sessions/ResumableSessionRow'
 import { defaultSessionName, MAX_SESSION_NAME, memberInitials, memberLabel } from '../sessions/sessionsTypes'
 import { MemberAvatar } from '../sessions/MemberAvatar'
 import { ShareSession } from '../sessions/ShareSession'
@@ -29,7 +29,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
 
 // SessionBar only ever renders under the board catalog route. The queue entry drives the shared
 // ?problem drawer through the pager opener CatalogScreen hands down (`onOpenProblem`), which
@@ -60,9 +59,48 @@ export function SessionBar({ board, onOpenProblem }: SessionBarProps) {
       {activeForThisBoard ? (
         <ActiveBar board={board} onShare={() => setShareOpen(true)} onOpenProblem={onOpenProblem} />
       ) : (
-        <StartBar board={board} signedIn={signedIn} onStarted={() => setShareOpen(true)} />
+        <>
+          {/* In-context Resume: when a live session for THIS board exists on the server (e.g.
+              started on the user's other device), stack one row per candidate above StartBar so
+              the crew is discoverable right where you'd expect. Explicit tap only — the app never
+              silently auto-adopts (R1 of docs/plans/2026-07-20-001-feat-web-resume-active-session-plan.md). */}
+          <ResumeRows board={board} />
+          <StartBar board={board} signedIn={signedIn} onStarted={() => setShareOpen(true)} />
+        </>
       )}
       <ShareDialog open={shareOpen} onOpenChange={setShareOpen} />
+    </>
+  )
+}
+
+/** Renders 0..N slim "Resume" rows for live sessions on THIS board, plus a slim "session ended"
+ *  row after a dead-on-arrival tap (auto-clears when the list repopulates). Same chrome family as
+ *  StartBar/ActiveBar so the whole SessionBar reads as one stacked strip. */
+function ResumeRows({ board }: { board: CatalogBoardDef }) {
+  const { resumable, resumingId, endedNotice, onResume } = useResumableSessions({
+    boardLayoutId: board.layoutId,
+  })
+  if (resumable.length === 0 && !endedNotice) return null
+  return (
+    <>
+      {resumable.map((s) => (
+        <ResumableSessionRow
+          key={s.id}
+          session={s}
+          disabled={resumingId === s.id}
+          onResume={(sess) => void onResume(sess)}
+          // Merge SessionBar's slim in-bar chrome over the row's default card styling.
+          className="rounded-none border-x-0 border-b border-t-0 bg-muted/60 hover:bg-muted"
+        />
+      ))}
+      {endedNotice && resumable.length === 0 && (
+        <p
+          role="status"
+          className="border-b border-border bg-muted/60 px-3 py-2 text-sm text-muted-foreground"
+        >
+          That session has ended.
+        </p>
+      )}
     </>
   )
 }
@@ -138,19 +176,9 @@ function ActiveBar({
   onOpenProblem: (id: string, stack: CatalogProblem[]) => void
 }) {
   const { activeSession, roster, selfId } = useSessions()
-  const [refreshing, setRefreshing] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const isOwner = !!selfId && activeSession?.ownerId === selfId
   const removable = roster.filter((m) => m.userId !== selfId)
-
-  const refresh = useCallback(async () => {
-    setRefreshing(true)
-    try {
-      await Promise.all([refreshMemberAscents(), refreshActiveSession({ manual: true })])
-    } finally {
-      setRefreshing(false)
-    }
-  }, [])
 
   if (!activeSession) return null
   const shown = roster.slice(0, 6)
@@ -184,9 +212,6 @@ function ActiveBar({
 
       <div className="ml-auto flex items-center gap-1">
         <QueueDrawer board={board} compact onOpenProblem={onOpenProblem} />
-        <Button variant="ghost" size="icon" className="size-8" onClick={() => void refresh()} aria-label="Refresh members">
-          <RefreshCw className={cn('size-4', refreshing && 'animate-spin')} />
-        </Button>
         <Button variant="ghost" size="icon" className="size-8" onClick={onShare} aria-label="Share session">
           <Share2 className="size-4" />
         </Button>

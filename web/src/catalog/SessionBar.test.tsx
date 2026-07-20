@@ -10,8 +10,11 @@ const h = vi.hoisted(() => ({
   endSession: vi.fn().mockResolvedValue(undefined),
   removeMember: vi.fn().mockResolvedValue(undefined),
   renameSession: vi.fn().mockResolvedValue(undefined),
-  refreshActiveSession: vi.fn().mockResolvedValue({ live: true }),
-  refreshMemberAscents: vi.fn().mockResolvedValue(undefined),
+  resumable: [] as unknown[],
+  resumingId: null as string | null,
+  endedNotice: false,
+  onResume: vi.fn(),
+  lastResumeOpts: undefined as { boardLayoutId?: number } | undefined,
 }))
 
 vi.mock('../sessions/sessionsStore', () => ({
@@ -21,9 +24,18 @@ vi.mock('../sessions/sessionsStore', () => ({
   endSession: () => h.endSession(),
   removeMember: (...a: unknown[]) => h.removeMember(...a),
   renameSession: (...a: unknown[]) => h.renameSession(...a),
-  refreshActiveSession: (...a: unknown[]) => h.refreshActiveSession(...a),
 }))
-vi.mock('../sessions/memberAscentsStore', () => ({ refreshMemberAscents: () => h.refreshMemberAscents() }))
+vi.mock('../sessions/useResumableSessions', () => ({
+  useResumableSessions: (opts?: { boardLayoutId?: number }) => {
+    h.lastResumeOpts = opts
+    return {
+      resumable: h.resumable,
+      resumingId: h.resumingId,
+      endedNotice: h.endedNotice,
+      onResume: (...a: unknown[]) => h.onResume(...a),
+    }
+  },
+}))
 vi.mock('../auth/AuthProvider', () => ({ useAuth: () => ({ status: h.authStatus }) }))
 vi.mock('../sessions/ShareSession', () => ({ ShareSession: () => <div>share-surface</div> }))
 // QueueDrawer is ActiveBar's own unit's concern — stub it so the SessionBar test stays isolated.
@@ -65,6 +77,11 @@ beforeEach(() => {
   h.leaveSession.mockClear()
   h.endSession.mockClear()
   h.removeMember.mockClear()
+  h.resumable = []
+  h.resumingId = null
+  h.endedNotice = false
+  h.onResume.mockClear()
+  h.lastResumeOpts = undefined
 })
 
 afterEach(() => vi.restoreAllMocks())
@@ -162,5 +179,44 @@ describe('SessionBar', () => {
     render(<SessionBar board={board} onOpenProblem={() => {}} />)
     fireEvent.click(screen.getByRole('button', { name: 'Session options' }))
     expect(screen.queryByRole('button', { name: /Remove/ })).toBeNull()
+  })
+
+  // ── In-context Resume: cross-device session discovered while browsing this board ──
+
+  it('scopes the resumable-sessions hook to this board', () => {
+    render(<SessionBar board={board} onOpenProblem={() => {}} />)
+    expect(h.lastResumeOpts).toEqual({ boardLayoutId: board.layoutId })
+  })
+
+  it('renders a Resume row above StartBar when a live session for this board exists', () => {
+    h.resumable = [{ id: 'S9', name: 'Tuesday crew', boardLayoutId: 7 }]
+    render(<SessionBar board={board} onOpenProblem={() => {}} />)
+    expect(screen.getByText('Tuesday crew')).toBeInTheDocument()
+    // StartBar's launcher still visible — non-destructive stack.
+    expect(screen.getByRole('button', { name: 'Start or join a session' })).toBeInTheDocument()
+  })
+
+  it('tapping a Resume row calls the hook onResume with that session', () => {
+    h.resumable = [{ id: 'S9', name: 'Tuesday crew', boardLayoutId: 7 }]
+    render(<SessionBar board={board} onOpenProblem={() => {}} />)
+    fireEvent.click(screen.getByText('Tuesday crew'))
+    expect(h.onResume).toHaveBeenCalledWith(expect.objectContaining({ id: 'S9' }))
+  })
+
+  it('renders a slim ended-notice row when the hook signals dead-on-arrival', () => {
+    h.endedNotice = true
+    render(<SessionBar board={board} onOpenProblem={() => {}} />)
+    expect(screen.getByRole('status')).toHaveTextContent('That session has ended.')
+    // StartBar still available — user can still start/join anew.
+    expect(screen.getByRole('button', { name: 'Start or join a session' })).toBeInTheDocument()
+  })
+
+  it('does not render Resume rows or ended-notice when a session for this board is already active', () => {
+    h.sessions = { activeSession: { id: 'S1', name: 'Crew', boardLayoutId: 7 }, roster: [], selfId: null }
+    h.resumable = [{ id: 'S9', name: 'Tuesday crew', boardLayoutId: 7 }] // ignored — ActiveBar path
+    h.endedNotice = true
+    render(<SessionBar board={board} onOpenProblem={() => {}} />)
+    expect(screen.queryByText('Tuesday crew')).not.toBeInTheDocument()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 })

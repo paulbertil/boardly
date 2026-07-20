@@ -3,6 +3,7 @@
 // caller) for the same reason joinUrl.ts owns the join-URL shape.
 
 import { useNavigate } from '@tanstack/react-router'
+import { activateBoard } from '../board/boardStore'
 import { boardByLayoutId } from '../board/boards'
 import { catalogNavTarget } from '../catalog/catalogNav'
 import type { Session } from './sessionsTypes'
@@ -16,9 +17,18 @@ type NavigateFn = ReturnType<typeof useNavigate>
  * regardless of local board state. A session whose board this build doesn't ship falls back to
  * `/boards` rather than a dead no-op (never route a session tap through a fallback-less handler
  * like the board-browse `onActivated`).
+ *
+ * Also promotes the session's board to the device's active board (MRU + persisted pointer) so a
+ * subsequent cold-launch or MyBoards visit reflects where the user actually is — otherwise the
+ * URL-scoped catalog and the device's `activeBoard` silently disagree. activateBoard is a no-op
+ * when the layout id isn't in this build's static catalog, so the /boards fallback stays honest.
  */
 export function navigateToSessionBoard(navigate: NavigateFn, session: Session): void {
   const board = boardByLayoutId(session.boardLayoutId)
-  if (board) void navigate(catalogNavTarget(board))
-  else void navigate({ to: '/boards' })
+  if (board) {
+    activateBoard(board.layoutId)
+    void navigate(catalogNavTarget(board))
+  } else {
+    void navigate({ to: '/boards' })
+  }
 }
