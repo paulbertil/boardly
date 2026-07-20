@@ -85,10 +85,30 @@ export async function markActivityRead(): Promise<void> {
   await supabase.rpc('mark_notifications_read', { p_ids: unread.map((a) => a.id) })
 }
 
-/** Clear on sign-out / user switch (in-memory only — network-only store). */
+/** Clear the in-memory notifications (network-only store; nothing persisted). */
 export function resetNotifications(): void {
   state = EMPTY
   for (const l of listeners) l()
+}
+
+const LAST_USER_KEY = 'notificationsLastUserId'
+
+/**
+ * Reconcile notifications with the signed-in identity — the same `syncXIdentity(userId)` contract
+ * the follows and feed stores use, called unconditionally from AuthProvider. Resets only when the
+ * id actually changes, so a token refresh / same-user restore does not wipe a loaded inbox. This
+ * closes the shared-device gap where the header badge (badgeCount) could briefly show user A's
+ * count to user B on a direct A→B switch with no intervening null session.
+ */
+export function syncNotificationsIdentity(userId: string | null): void {
+  const next = userId ?? ''
+  if (localStorage.getItem(LAST_USER_KEY) === next) return
+  resetNotifications()
+  try {
+    localStorage.setItem(LAST_USER_KEY, next)
+  } catch {
+    // ignore
+  }
 }
 
 // ─── Reactive bindings ────────────────────────────────────────────────────────

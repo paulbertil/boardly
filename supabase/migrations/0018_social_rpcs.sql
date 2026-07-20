@@ -78,10 +78,20 @@ begin
     returning * into _edge;
 
     if found then
-        -- Newly created. Notify the followee only when the follow is immediately active.
+        -- Newly created. Notify the followee only when the follow is immediately active — and
+        -- only if they don't already have an UNREAD 'follow' notification from this actor. That
+        -- de-dup makes a follow → unfollow → re-follow loop produce at most one unread follow
+        -- notification per (actor, target) pair (each cycle re-creates the edge and would
+        -- otherwise fire a fresh notification), while still allowing a genuine later re-follow to
+        -- notify once the followee has seen the previous one.
         if _edge.status = 'active' then
             insert into public.notifications (user_id, type, actor_id)
-            values (p_target, 'follow', auth.uid());
+            select p_target, 'follow', auth.uid()
+            where not exists (
+                select 1 from public.notifications
+                where user_id = p_target and actor_id = auth.uid()
+                  and type = 'follow' and read_at is null
+            );
         end if;
         return _edge;
     end if;

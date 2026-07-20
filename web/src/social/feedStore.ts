@@ -91,7 +91,7 @@ export function purgeActorFromFeed(actorId: string): void {
   }
 }
 
-/** Clear the cached feed (sign-out / user switch). Called from AuthProvider identity sync. */
+/** Clear the cached feed + in-memory state. */
 export function clearFeedCache(): void {
   try {
     localStorage.removeItem(CACHE_KEY)
@@ -100,6 +100,27 @@ export function clearFeedCache(): void {
   }
   state = EMPTY
   for (const l of listeners) l()
+}
+
+const LAST_USER_KEY = 'feedLastUserId'
+
+/**
+ * Reconcile the feed with the signed-in identity — the same `syncXIdentity(userId)` contract the
+ * follows and notifications stores use, called unconditionally from AuthProvider on every auth
+ * event. Clears the cache + in-memory feed only when the id actually changes (sign-out or a
+ * different user), so a token refresh or same-user restore is a no-op (the last-fetch cache
+ * survives). The cache is already user-keyed on read, so this is defence-in-depth for the
+ * in-memory state a shared device would otherwise briefly show.
+ */
+export function syncFeedIdentity(userId: string | null): void {
+  const next = userId ?? ''
+  if (localStorage.getItem(LAST_USER_KEY) === next) return
+  clearFeedCache()
+  try {
+    localStorage.setItem(LAST_USER_KEY, next)
+  } catch {
+    // ignore
+  }
 }
 
 async function fetchPage(cursor: SendItem | null): Promise<SendItem[] | null> {

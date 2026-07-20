@@ -221,6 +221,23 @@ begin
     raise notice 'PASS: get_profile_card resolves a handle (case-insensitive) for a normal viewer';
 end $$;
 
+-- ── notification de-dup: a follow → unfollow → re-follow loop can't spam ──────
+-- A already follows B (active) with an unread 'follow' notif to B. Unfollow + re-follow must
+-- NOT create a second unread notification (and leaves the edge active for the tests below).
+select public.unfollow('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+do $$ begin perform public.request_follow('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'); end $$;
+select set_config('test.uid', :'B', false);
+do $$
+declare _n int;
+begin
+    select count(*) into _n from public.notifications
+        where user_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
+          and actor_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' and type = 'follow';
+    assert _n = 1, 'FAIL: follow/unfollow/re-follow spammed notifications (got ' || _n || ', expected 1)';
+    raise notice 'PASS: re-follow loop does not spam follow notifications (unread dedup)';
+end $$;
+select set_config('test.uid', :'A', false);
+
 -- ── get_follow_counts / get_follow_list gated by can_view_social_graph ────────
 -- As A (follows B active + C active — E is only pending, not counted): own counts + list.
 do $$
