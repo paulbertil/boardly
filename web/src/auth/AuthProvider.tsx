@@ -13,6 +13,7 @@ import { isConfigured, supabase } from '../supabase/client'
 import { syncListsIdentity } from '../lists/listsStore'
 import { syncSessionsIdentity } from '../sessions/sessionsStore'
 import { syncFollowsIdentity } from '../social/followStore'
+import { clearFeedCache } from '../social/feedStore'
 import { normalizeHandle } from './handle'
 import { profileFromRow, type AuthStatus, type Profile, type ProfileRow } from './types'
 import { isAvatarPath } from './avatarStorage'
@@ -129,6 +130,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // KTD10): drop cached edges when the identity changes.
       syncFollowsIdentity(session?.user.id ?? null)
       if (!session) {
+        // Drop the cached feed on sign-out (the cache is user-keyed, so a switch is already
+        // safe on read — this just avoids leaving the last feed in localStorage after sign-out).
+        clearFeedCache()
         applyProfile(null)
         setStatus('signedOut')
         setIsRestoring(false)

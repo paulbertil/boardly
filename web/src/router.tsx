@@ -15,6 +15,7 @@
 //   /board/$layoutId/catalog → CatalogScreen  (search params: see catalogSearch.ts)
 //   /u/$handle               → ProfileScreen  (a user's follow-feed profile)
 //   /people                  → DiscoverScreen (search + co-members + follow-back)
+//   /feed                    → FeedScreen     (follow feed of friends' sends)
 //
 // The tree is built by a factory so tests can spin up an isolated memory-history
 // router without reusing route objects already bound to the browser router.
@@ -40,6 +41,7 @@ import { CatalogScreen } from './catalog/CatalogScreen'
 import { JoinSession } from './sessions/JoinSession'
 import { ProfileScreen } from './social/ProfileScreen'
 import { DiscoverScreen } from './social/DiscoverScreen'
+import { FeedScreen } from './social/FeedScreen'
 import { boardByLayoutId } from './board/boards'
 import { getActiveBoardId, getAddedBoardIds } from './board/boardStore'
 import { catalogNavTarget } from './catalog/catalogNav'
@@ -159,6 +161,13 @@ function buildRouteTree() {
     component: DiscoverScreen,
   })
 
+  // The follow feed (U5).
+  const feedRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/feed',
+    component: FeedScreen,
+  })
+
   return rootRoute.addChildren([
     indexRoute,
     boardsRoute,
@@ -171,6 +180,7 @@ function buildRouteTree() {
     joinSessionRoute,
     profileRoute,
     peopleRoute,
+    feedRoute,
   ])
 }
 
