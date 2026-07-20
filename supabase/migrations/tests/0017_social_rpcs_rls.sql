@@ -200,6 +200,15 @@ begin
     raise notice 'PASS: co-member suggestion = shared graph minus followed/self';
 end $$;
 
+-- ── get_profile_card: visible (case-insensitive) for a normal viewer ──────────
+do $$
+declare _id uuid;
+begin
+    select id into _id from public.get_profile_card('BRUNO');  -- case-insensitive handle
+    assert _id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'FAIL: get_profile_card did not resolve a visible handle';
+    raise notice 'PASS: get_profile_card resolves a handle (case-insensitive) for a normal viewer';
+end $$;
+
 -- ── block: tears down edges both ways, gates every read, purges notifications ──
 -- A blocks B. Their active edge + A's follow-notification-from-B-side and B's notif must go.
 select public.block_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
@@ -216,7 +225,7 @@ begin
     assert _n = 1, 'FAIL: blocked user''s sends still in feed (feed count ' || _n || ', expected 1 = C only)';
 
     -- A cannot see B's card, sends, or find B in search; re-follow is rejected.
-    select count(*) into _n from public.get_profile_card('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+    select count(*) into _n from public.get_profile_card('bruno');
     assert _n = 0, 'FAIL: blocked user''s profile card still visible';
     select count(*) into _n from public.get_user_sends('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
     assert _n = 0, 'FAIL: blocked user''s sends still visible';
@@ -235,7 +244,7 @@ select set_config('test.uid', :'B', false);
 do $$
 declare _n int;
 begin
-    select count(*) into _n from public.get_profile_card('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+    select count(*) into _n from public.get_profile_card('anna');
     assert _n = 0, 'FAIL: block not bidirectional — B still sees A''s card';
     raise notice 'PASS: block is bidirectional for the profile card';
 end $$;

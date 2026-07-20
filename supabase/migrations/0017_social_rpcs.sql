@@ -196,27 +196,28 @@ revoke all on function public.unblock_user(uuid) from public;
 grant execute on function public.unblock_user(uuid) to authenticated;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Profile card (KTD6). Block-aware handle→card read: empty for a blocked pair (R11/R12), so a
--- blocked viewer sees an "unavailable" profile. The R7 card exemption (a private account's
--- card stays visible to non-followers) is NOT extended to blocked users — hence this gate.
-create or replace function public.get_profile_card(p_target uuid)
+-- Profile card (KTD6). Block-aware handle→card read (the /u/:handle screen has a handle, not
+-- an id): empty for a blocked pair (R11/R12), so a blocked viewer sees an "unavailable"
+-- profile. The R7 card exemption (a private account's card stays visible to non-followers) is
+-- NOT extended to blocked users — hence this gate. Match is case-insensitive via lower() on the
+-- ::text form (handle is citext, but its operators aren't resolvable under an empty search_path).
+create or replace function public.get_profile_card(p_handle text)
     returns table (id uuid, handle text, display_name text, avatar_url text, is_private boolean)
     language plpgsql
     security definer
     set search_path = ''
 as $$
 begin
-    if public.is_blocked(auth.uid(), p_target) then
-        return;  -- empty: the blocked pair sees each other as absent
-    end if;
     return query
         select p.id, p.handle::text, p.display_name, p.avatar_url, p.is_private
-        from public.profiles p where p.id = p_target;
+        from public.profiles p
+        where lower(p.handle::text) = lower(trim(p_handle))
+          and not public.is_blocked(auth.uid(), p.id);  -- blocked pair → empty (absent profile)
 end;
 $$;
 
-revoke all on function public.get_profile_card(uuid) from public;
-grant execute on function public.get_profile_card(uuid) to authenticated;
+revoke all on function public.get_profile_card(text) from public;
+grant execute on function public.get_profile_card(text) to authenticated;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Discovery.
