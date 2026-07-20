@@ -33,8 +33,17 @@ interface AuthContextValue {
   deleteAccount: () => Promise<void>
   isHandleAvailable: (handle: string) => Promise<boolean>
   /** Upsert the caller's profile row. Pass `avatarPath` (an in-bucket object path or null)
-   *  to write `avatar_url`; omit it to leave the column untouched. */
-  saveProfile: (handle: string, displayName: string, avatarPath?: string | null) => Promise<void>
+   *  to write `avatar_url`; omit it to leave the column untouched. Pass `isPrivate` (onboarding)
+   *  to set the privacy flag AND stamp `privacy_choice_at` — omit it to leave both untouched. */
+  saveProfile: (
+    handle: string,
+    displayName: string,
+    avatarPath?: string | null,
+    isPrivate?: boolean,
+  ) => Promise<void>
+  /** Record an explicit public/private choice for an EXISTING profile (the one-time notice):
+   *  sets `is_private` + stamps `privacy_choice_at`. */
+  setPrivacyChoice: (isPrivate: boolean) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -223,7 +232,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const saveProfile = useCallback(
-    async (handle: string, displayName: string, avatarPath?: string | null) => {
+    async (handle: string, displayName: string, avatarPath?: string | null, isPrivate?: boolean) => {
       const client = requireClient()
       const { data: sessionData } = await client.auth.getSession()
       const userId = sessionData.session?.user.id
@@ -233,6 +242,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         id: userId,
         handle: normalizeHandle(handle),
         display_name: displayName.trim(),
+      }
+      // Onboarding passes the explicit public/private choice: set the flag AND stamp the
+      // marker (KTD9), so the new user is never "unchosen" (private-until-chosen) after setup.
+      if (isPrivate !== undefined) {
+        row.is_private = isPrivate
+        row.privacy_choice_at = new Date().toISOString()
       }
       // avatar_url is written only when explicitly provided (including null = remove).
       // Defense in depth beside the DB CHECK (0009): must be null, or the caller's OWN
@@ -254,6 +269,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [requireClient, refreshProfile],
   )
 
+  const setPrivacyChoice = useCallback(
+    async (isPrivate: boolean) => {
+      const client = requireClient()
+      const { data: sessionData } = await client.auth.getSession()
+      const userId = sessionData.session?.user.id
+      if (!userId) throw new Error('You need to be signed in to do that.')
+      // Existing profile → update only the privacy columns + stamp the marker (the one-time
+      // notice). An update (not upsert) so the handle/display_name are never touched.
+      const { error } = await client
+        .from('profiles')
+        .update({ is_private: isPrivate, privacy_choice_at: new Date().toISOString() })
+        .eq('id', userId)
+      if (error) throw error
+      await refreshProfile()
+    },
+    [requireClient, refreshProfile],
+  )
+
   const value = useMemo<AuthContextValue>(
     () => ({
       status,
@@ -267,6 +300,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       deleteAccount,
       isHandleAvailable,
       saveProfile,
+      setPrivacyChoice,
     }),
     [
       status,
@@ -279,6 +313,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       deleteAccount,
       isHandleAvailable,
       saveProfile,
+      setPrivacyChoice,
     ],
   )
 
