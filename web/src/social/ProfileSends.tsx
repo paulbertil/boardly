@@ -5,22 +5,31 @@
 // must not leak whether it has activity).
 //
 // One fetch feeds three sections: the grade pyramid, the latest climbing session, and the full
-// keyset-paged list. All derive from the accumulated sends, so "Load more" grows the pyramid
-// too. Rows are the shared logbook `AscentRow` (read-only — no edit pencil), enriched from the
-// viewer's own synced catalog (setter/benchmark) when the problem resolves, exactly like the
-// logbook.
+// keyset-paged list. Rows are the shared logbook `AscentRow` (read-only — no edit pencil, and no
+// "sent" check since every row is a send by this user), enriched from the viewer's own synced
+// catalog (setter/benchmark). Tapping a resolvable row opens the same `?problem` detail drawer
+// the logbook and catalog use — the pager domain is the loaded sends, and the drawer's green
+// "sent" check reflects the VIEWER's own logbook (i.e. "you've also done this").
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
+import { getRouteApi } from '@tanstack/react-router'
+import { boardByLayoutId } from '../board/boards'
 import { getCatalogProblemsByIds, type CatalogProblem } from '../catalog/catalogSync'
+import { useFavorites } from '../catalog/favoritesStore'
+import { ProblemDetail } from '../catalog/ProblemDetail'
+import { useProblemDrawer } from '../catalog/useProblemDrawer'
 import { AscentRow } from '../logbook/AscentRow'
-import type { Ascent } from '../logbook/ascents'
+import { useEnsureAscentsLoaded, type Ascent } from '../logbook/ascents'
 import { GradePyramid } from '../logbook/GradePyramid'
 import type { PyramidInput } from '../logbook/sessions'
+import { Button } from '@/components/ui/button'
+import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
+import { Skeleton } from '@/components/ui/skeleton'
 import { fetchSendsPage, SENDS_PAGE } from './sendsPage'
 import { latestSession } from './profileStats'
 import type { SendItem } from './socialTypes'
+
+const routeApi = getRouteApi('/u/$handle')
 
 /** Map profile sends to the pyramid's minimal shape — projection sends are all `sent`. */
 function toPyramidInput(sends: SendItem[]): PyramidInput[] {
@@ -92,8 +101,8 @@ export function ProfileSends({ userId }: { userId: string }) {
     })
   }, [fetchPage])
 
-  // Enrich rows from the viewer's own cached catalog (setter/benchmark), same as the logbook —
-  // resolves for boards the viewer has synced; the rest fall back gracefully.
+  // Enrich rows from the viewer's own cached catalog (setter/benchmark + tap-to-open), same as
+  // the logbook — resolves for boards the viewer has synced; the rest fall back gracefully.
   useEffect(() => {
     const ids = sends.map((s) => s.sourceCatalogId).filter((v): v is string => v !== null)
     if (ids.length === 0) return
@@ -120,6 +129,61 @@ export function ProfileSends({ userId }: { userId: string }) {
 
   const session = useMemo(() => latestSession(sends), [sends])
   const pyramidInput = useMemo(() => toPyramidInput(sends), [sends])
+
+  // ── Problem detail drawer (?problem) — same protocol as logbook/catalog ──────
+  const search = routeApi.useSearch()
+  const navigate = routeApi.useNavigate()
+  const openId = search.problem ?? ''
+  const { pagerStack, openProblem, showProblem, closeDrawer } = useProblemDrawer({
+    openId,
+    pushProblem: (id) => void navigate({ search: (prev) => ({ ...prev, problem: id }) }),
+    replaceProblem: (id) =>
+      void navigate({ search: (prev) => ({ ...prev, problem: id }), replace: true }),
+    clearProblem: () => void navigate({ search: (prev) => ({ ...prev, problem: '' }), replace: true }),
+  })
+
+  // The pager domain: the loaded sends' resolvable catalog problems, in on-screen order, deduped
+  // by source_catalog_id (keep the first occurrence).
+  const sendProblems = useMemo(() => {
+    const seen = new Set<string>()
+    const out: CatalogProblem[] = []
+    for (const s of sends) {
+      const id = s.sourceCatalogId
+      if (!id || seen.has(id)) continue
+      const problem = catalogById.get(id)
+      if (!problem) continue
+      seen.add(id)
+      out.push(problem)
+    }
+    return out
+  }, [sends, catalogById])
+
+  const current = openId
+    ? (pagerStack?.find((p) => p.source_catalog_id === openId) ?? catalogById.get(openId))
+    : undefined
+  const displayed = pagerStack ?? (current ? [current] : [])
+  const currentBoard = current ? boardByLayoutId(current.layout_id) : undefined
+
+  const { favoriteIds } = useFavorites()
+  // The green "sent" check in the drawer = the VIEWER's own logged sends (all boards) — "you've
+  // also done this" — not the profile owner's. Answers the row-level ambiguity explicitly.
+  const { ascents: myAscents } = useEnsureAscentsLoaded()
+  const sentIds = useMemo(
+    () =>
+      new Set(
+        myAscents.filter((a) => a.sent && a.sourceCatalogId).map((a) => a.sourceCatalogId as string),
+      ),
+    [myAscents],
+  )
+
+  const openSend = useCallback(
+    (s: SendItem) => {
+      if (s.sourceCatalogId && catalogById.has(s.sourceCatalogId)) {
+        openProblem(s.sourceCatalogId, sendProblems)
+      }
+    },
+    [catalogById, openProblem, sendProblems],
+  )
 
   if (status === 'loading') {
     return (
@@ -155,39 +219,66 @@ export function ProfileSends({ userId }: { userId: string }) {
               {session.sends.length === 1 ? '' : 's'}
             </span>
           </div>
-          <SendRows sends={session.sends} catalogById={catalogById} />
+          <SendRows sends={session.sends} catalogById={catalogById} onOpen={openSend} />
         </section>
       )}
 
       <section className="flex flex-col">
-        <SendRows sends={sends} catalogById={catalogById} />
+        <SendRows sends={sends} catalogById={catalogById} onOpen={openSend} />
         {!done && (
           <Button variant="ghost" className="mt-2 self-center" disabled={loadingMore} onClick={() => void loadMore()}>
             {loadingMore ? 'Loading…' : 'Load more'}
           </Button>
         )}
       </section>
+
+      <Drawer open={current !== undefined} onOpenChange={(open) => !open && closeDrawer()} showSwipeHandle>
+        <DrawerContent>
+          <DrawerTitle className="sr-only">Problem details</DrawerTitle>
+          <div className="max-h-[85vh] overflow-y-auto px-4 pt-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
+            {current && currentBoard && (
+              <ProblemDetail
+                problem={current}
+                displayed={displayed}
+                board={currentBoard}
+                angle={current.angle}
+                favoriteIds={favoriteIds}
+                sentIds={sentIds}
+                onNavigate={showProblem}
+              />
+            )}
+          </div>
+        </DrawerContent>
+      </Drawer>
     </div>
   )
 }
 
-/** Read-only list of sends as shared AscentRows (no edit pencil, not tappable in v1). */
+/** Read-only list of sends as shared AscentRows (no edit pencil, no per-row sent check).
+ *  Rows whose problem resolves in the viewer's catalog are tappable → the detail drawer. */
 function SendRows({
   sends,
   catalogById,
+  onOpen,
 }: {
   sends: SendItem[]
   catalogById: Map<string, CatalogProblem>
+  onOpen: (send: SendItem) => void
 }) {
   return (
     <div className="flex flex-col overflow-hidden rounded-lg border border-border">
-      {sends.map((s) => (
-        <AscentRow
-          key={s.ascentId}
-          ascent={toAscent(s)}
-          catalog={s.sourceCatalogId ? catalogById.get(s.sourceCatalogId) : undefined}
-        />
-      ))}
+      {sends.map((s) => {
+        const resolved = s.sourceCatalogId ? catalogById.get(s.sourceCatalogId) : undefined
+        return (
+          <AscentRow
+            key={s.ascentId}
+            ascent={toAscent(s)}
+            catalog={resolved}
+            showSentIndicator={false}
+            onSelect={resolved ? () => onOpen(s) : undefined}
+          />
+        )
+      })}
     </div>
   )
 }

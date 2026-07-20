@@ -151,6 +151,10 @@ function buildRouteTree() {
   const profileRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/u/$handle',
+    // Same one-bit drawer state as the logbook: ?problem=<id> opens a send's detail,
+    // history-integrated (Back closes it, stays on the profile).
+    validateSearch: validateLogbookSearch,
+    search: { middlewares: [stripSearchParams(LOGBOOK_SEARCH_DEFAULTS)] },
     component: ProfileScreen,
   })
 

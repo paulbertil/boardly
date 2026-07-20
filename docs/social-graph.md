@@ -102,7 +102,12 @@ read data). Module-level state + `useSyncExternalStore`, cleared on identity cha
   shared `sendsPage.ts`) feeds three profile sections: the **grade pyramid** — the logbook's own
   `GradePyramid`/`pyramid()`, try-bucket-split (flash/2nd/3rd/4+), fed by the `tries` the projection
   now carries — the **latest session** (`latestSession` — the most-recent local-day cluster), and
-  the keyset-paged **all-sends** list. "Load more" grows all three.
+  the keyset-paged **all-sends** list. "Load more" grows all three. Rows are the shared logbook
+  `AscentRow`, read-only: no edit pencil, and `showSentIndicator={false}` (every row is a send by
+  this user, so an always-on green check would misread as "you sent it"). Rows resolvable in the
+  viewer's synced catalog open the same **`?problem` detail drawer** the logbook/catalog use
+  (`useProblemDrawer` + `ProblemDetail`); the drawer's green check reflects the *viewer's* own
+  sends ("you've also done this").
 - **`notificationsStore`** — requests (from `get_follow_requests`) + activity (`get_notifications`);
   `badgeCount` = pending requests + unread activity (a request has no `read_at` and is the most
   actionable item, so it counts even with zero unread activity).
@@ -113,7 +118,7 @@ read data). Module-level state + `useSyncExternalStore`, cleared on identity cha
 | --- | --- |
 | `/people` | `DiscoverScreen` — search + co-members + follow-back. |
 | `/notifications` | `NotificationsScreen` — requests (approve/decline) + activity. |
-| `/u/$handle` | `ProfileScreen` — card + relationship button + block + `ProfileSends` (grade pyramid, latest session, list); block-gated "unavailable" state. |
+| `/u/$handle` | `ProfileScreen` — card + relationship button + block + `ProfileSends` (grade pyramid, latest session, tappable list → `?problem` drawer); block-gated "unavailable" state. |
 
 `RelationshipButton` is the visible follow state machine (Follow / Requested→cancel /
 Following→confirm-then-unfollow). `PersonRow` (avatar + identity link + button) is shared across

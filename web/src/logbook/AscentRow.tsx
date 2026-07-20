@@ -25,6 +25,9 @@ interface AscentRowProps {
   /** Board for the thumbnail; only needed when `showThumbnail`. */
   board?: CatalogBoardDef
   showThumbnail?: boolean
+  /** Show the green "Sent" check / "Attempt" pill. Default true (logbook). A profile lists only
+   *  that user's sends, so the check would be always-on and read as "you sent it" — pass false. */
+  showSentIndicator?: boolean
   /** Edit this ascent (the pencil). Omitted on read-only surfaces (e.g. another user's
    *  profile) — the pencil then isn't rendered. */
   onEdit?: (ascent: Ascent) => void
@@ -47,6 +50,7 @@ export function AscentRow({
   catalog,
   board,
   showThumbnail = false,
+  showSentIndicator = true,
   onEdit,
   onSelect,
 }: AscentRowProps) {
@@ -71,13 +75,14 @@ export function AscentRow({
           {catalog?.is_benchmark && (
             <BadgeCheck role="img" aria-label="Benchmark" className="size-4 shrink-0 text-benchmark" />
           )}
-          {ascent.sent ? (
-            <CheckCircle2 role="img" aria-label="Sent" className="size-4 shrink-0 text-success" />
-          ) : (
-            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[0.65rem] font-medium text-muted-foreground">
-              Attempt
-            </span>
-          )}
+          {showSentIndicator &&
+            (ascent.sent ? (
+              <CheckCircle2 role="img" aria-label="Sent" className="size-4 shrink-0 text-success" />
+            ) : (
+              <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[0.65rem] font-medium text-muted-foreground">
+                Attempt
+              </span>
+            ))}
         </div>
         <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs text-muted-foreground">
           {ascent.stars > 0 && (
@@ -85,7 +90,9 @@ export function AscentRow({
               <Star className="size-3" /> {ascent.stars}
             </span>
           )}
-          <span className="shrink-0">{triesLabel(ascent.tries, ascent.sent)}</span>
+          {Number.isFinite(ascent.tries) && (
+            <span className="shrink-0">{triesLabel(ascent.tries, ascent.sent)}</span>
+          )}
           {setter && <span className="truncate">by {setter}</span>}
         </div>
         {ascent.comment && (
