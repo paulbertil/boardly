@@ -169,7 +169,15 @@ begin
     select count(*) into _page2
         from public.get_user_sends('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 30, _cursor_fs, _cursor_id);
     assert _page2 = 2, 'FAIL: keyset page 2 expected 2, saw ' || _page2;
-    raise notice 'PASS: profile sends = live sends, newest-first, keyset paginates';
+
+    -- board filter: seed sends default board_layout_id=7, so board 7 shows all 3, board 999 none.
+    select count(*) into _n
+        from public.get_user_sends('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 30, null, null, 7);
+    assert _n = 3, 'FAIL: board-7 filter expected 3 sends, saw ' || _n;
+    select count(*) into _n
+        from public.get_user_sends('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 30, null, null, 999);
+    assert _n = 0, 'FAIL: board-999 filter should be empty, saw ' || _n;
+    raise notice 'PASS: profile sends = live sends, newest-first, keyset + board filter';
 end $$;
 
 -- ── projection core is unreachable directly (execute revoked) ─────────────────

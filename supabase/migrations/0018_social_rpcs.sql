@@ -433,7 +433,8 @@ create or replace function public._sends_for_actors(
         p_actor_ids uuid[],
         p_limit int,
         p_before_first_sent timestamptz,
-        p_before_id uuid)
+        p_before_id uuid,
+        p_board_layout_id int default null)
     returns table (ascent_id uuid, actor_id uuid, handle text, display_name text, avatar_url text,
                    source_catalog_id text, user_problem_id uuid, problem_name text,
                    problem_grade text, board_layout_id int, climbed_at timestamptz,
@@ -450,6 +451,7 @@ as $$
     join public.profiles p on p.id = a.user_id
     where a.user_id = any(p_actor_ids)
       and a.sent = true and a.deleted = false and a.first_sent_at is not null
+      and (p_board_layout_id is null or a.board_layout_id = p_board_layout_id)
       and (p_before_first_sent is null
            or (a.first_sent_at, a.id) < (p_before_first_sent, p_before_id))
     order by a.first_sent_at desc, a.id desc
@@ -463,16 +465,18 @@ $$;
 -- gate bypass: any client could POST /rest/v1/rpc/_sends_for_actors with an arbitrary actor
 -- array and read anyone's sends). Only the two same-owner SECURITY DEFINER wrappers below may
 -- call it.
-revoke all on function public._sends_for_actors(uuid[], int, timestamptz, uuid)
+revoke all on function public._sends_for_actors(uuid[], int, timestamptz, uuid, int)
     from public, anon, authenticated, service_role;
 
 -- get_user_sends: a single actor after the R6/R12 gate — blocked → empty; effectively-private
--- and neither self nor an active follower → empty.
+-- and neither self nor an active follower → empty. p_board_layout_id (default null = all boards)
+-- scopes the sends to one board, so a profile mirrors the viewer's active-board logbook.
 create or replace function public.get_user_sends(
         p_target uuid,
         p_limit int default 30,
         p_before_first_sent timestamptz default null,
-        p_before_id uuid default null)
+        p_before_id uuid default null,
+        p_board_layout_id int default null)
     returns table (ascent_id uuid, actor_id uuid, handle text, display_name text, avatar_url text,
                    source_catalog_id text, user_problem_id uuid, problem_name text,
                    problem_grade text, board_layout_id int, climbed_at timestamptz,
@@ -493,12 +497,12 @@ begin
     end if;
     return query
         select * from public._sends_for_actors(
-            array[p_target], p_limit, p_before_first_sent, p_before_id);
+            array[p_target], p_limit, p_before_first_sent, p_before_id, p_board_layout_id);
 end;
 $$;
 
-revoke all on function public.get_user_sends(uuid, int, timestamptz, uuid) from public;
-grant execute on function public.get_user_sends(uuid, int, timestamptz, uuid) to authenticated;
+revoke all on function public.get_user_sends(uuid, int, timestamptz, uuid, int) from public;
+grant execute on function public.get_user_sends(uuid, int, timestamptz, uuid, int) to authenticated;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Notifications. get_notifications is block-aware (a stale row whose actor is now blocked is
