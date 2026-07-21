@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getRouteApi } from '@tanstack/react-router'
 import { boardByLayoutId } from '../board/boards'
+import { useBoardStore } from '../board/boardStore'
 import { getCatalogProblemsByIds, type CatalogProblem } from '../catalog/catalogSync'
 import { useFavorites } from '../catalog/favoritesStore'
 import { useShowPreviews } from '../catalog/previewsStore'
@@ -62,9 +63,16 @@ export function ProfileSends({ userId }: { userId: string }) {
   // Guards against a stale response overwriting a newer userId's list.
   const reqId = useRef(0)
 
+  // Scope to the viewer's active board, so a profile mirrors their active-board logbook (server
+  // filters, so keyset pagination stays correct). Changing board refetches from page 1.
+  const { activeBoard } = useBoardStore()
   const fetchPage = useCallback(
-    (cursor: SendItem | null) => fetchSendsPage('get_user_sends', cursor, { p_target: userId }),
-    [userId],
+    (cursor: SendItem | null) =>
+      fetchSendsPage('get_user_sends', cursor, {
+        p_target: userId,
+        p_board_layout_id: activeBoard.layoutId,
+      }),
+    [userId, activeBoard.layoutId],
   )
 
   useEffect(() => {

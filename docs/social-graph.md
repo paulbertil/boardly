@@ -83,7 +83,7 @@ minimal-projection SECURITY DEFINER core, exactly like 0004's list group-status 
 | `get_follow_list(target, kind, limit)` / `get_follow_counts(target)` | Follower/following lists + counts, block- + effective-private-gated (`can_view_social_graph`). |
 | `get_follow_requests(limit)` | Pending requests toward the caller (requester cards) — sourced from `follows`, not notifications. |
 | `_sends_for_actors(ids, limit, cursor…)` | **Revoked** projection core: minimal columns, keyset. |
-| `get_user_sends(target, limit, cursor…)` | Single actor after the R6/R12 gate → core. Powers the profile page (`ProfileSends`); the only wrapper over the core. |
+| `get_user_sends(target, limit, cursor…, board_layout_id)` | Single actor after the R6/R12 gate → core, optionally scoped to one board (`p_board_layout_id`, null = all). Powers the profile page (`ProfileSends`); the only wrapper over the core. |
 | `get_notifications(limit)` / `mark_notifications_read(ids)` | Block-aware activity read / mark read. |
 
 **Requests are sourced from `follows` (status='pending'), never duplicated into `notifications`**
@@ -100,7 +100,9 @@ read data). Module-level state + `useSyncExternalStore`, cleared on identity cha
   `block`/`unblock` over the RPCs, rolling back on error so the caller toasts loudly (KTD10).
   `seedEdge` primes status from `search_profiles` rows.
 - **`ProfileSends`** — one keyset fetch over `get_user_sends` (via the shared `sendsPage.ts`),
-  mapped to `Ascent` and rendered **exactly like the logbook**: a **grade pyramid** (the logbook's
+  scoped to the **viewer's active board** (`p_board_layout_id`, filtered server-side so keyset
+  paging stays correct — changing board refetches), mapped to `Ascent` and rendered **exactly like
+  the logbook**: a **grade pyramid** (the logbook's
   own `GradePyramid`/`pyramid()`, try-bucket-split flash/2nd/3rd/4+) then the sends grouped into
   **day-sessions** (the same `sessions()` grouping + date headers, e.g. "Tue, Jul 21 — 2
   problems"). "Load more" appends more keyset pages into the day groups. Rows are the shared
