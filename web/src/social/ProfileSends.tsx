@@ -16,6 +16,7 @@ import { getRouteApi } from '@tanstack/react-router'
 import { boardByLayoutId } from '../board/boards'
 import { getCatalogProblemsByIds, type CatalogProblem } from '../catalog/catalogSync'
 import { useFavorites } from '../catalog/favoritesStore'
+import { useShowPreviews } from '../catalog/previewsStore'
 import { ProblemDetail } from '../catalog/ProblemDetail'
 import { useProblemDrawer } from '../catalog/useProblemDrawer'
 import { AscentRow } from '../logbook/AscentRow'
@@ -165,6 +166,8 @@ export function ProfileSends({ userId }: { userId: string }) {
   const currentBoard = current ? boardByLayoutId(current.layout_id) : undefined
 
   const { favoriteIds } = useFavorites()
+  // Thumbnails honour the viewer's logbook preview toggle — same style/surface as the logbook.
+  const showThumbnails = useShowPreviews('logbook')
   // The green "sent" check in the drawer = the VIEWER's own logged sends (all boards) — "you've
   // also done this" — not the profile owner's. Answers the row-level ambiguity explicitly.
   const { ascents: myAscents } = useEnsureAscentsLoaded()
@@ -219,12 +222,22 @@ export function ProfileSends({ userId }: { userId: string }) {
               {session.sends.length === 1 ? '' : 's'}
             </span>
           </div>
-          <SendRows sends={session.sends} catalogById={catalogById} onOpen={openSend} />
+          <SendRows
+            sends={session.sends}
+            catalogById={catalogById}
+            showThumbnails={showThumbnails}
+            onOpen={openSend}
+          />
         </section>
       )}
 
       <section className="flex flex-col">
-        <SendRows sends={sends} catalogById={catalogById} onOpen={openSend} />
+        <SendRows
+          sends={sends}
+          catalogById={catalogById}
+          showThumbnails={showThumbnails}
+          onOpen={openSend}
+        />
         {!done && (
           <Button variant="ghost" className="mt-2 self-center" disabled={loadingMore} onClick={() => void loadMore()}>
             {loadingMore ? 'Loading…' : 'Load more'}
@@ -259,10 +272,12 @@ export function ProfileSends({ userId }: { userId: string }) {
 function SendRows({
   sends,
   catalogById,
+  showThumbnails,
   onOpen,
 }: {
   sends: SendItem[]
   catalogById: Map<string, CatalogProblem>
+  showThumbnails: boolean
   onOpen: (send: SendItem) => void
 }) {
   return (
@@ -274,6 +289,8 @@ function SendRows({
             key={s.ascentId}
             ascent={toAscent(s)}
             catalog={resolved}
+            board={boardByLayoutId(s.boardLayoutId)}
+            showThumbnail={showThumbnails}
             showSentIndicator={false}
             onSelect={resolved ? () => onOpen(s) : undefined}
           />
