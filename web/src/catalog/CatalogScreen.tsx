@@ -178,6 +178,12 @@ export function CatalogScreen() {
     return idx.length ? [Math.min(...idx), Math.max(...idx)] : [0, FONT_GRADES.length - 1]
   }, [problems])
 
+  // The header's "Grade" dropdown control only makes sense once the slab has produced a
+  // real range to narrow: hide it while cold (no problems yet — the empty-slab fallback
+  // above is the full scale, not a real span) and on a single-grade slab (nothing to
+  // narrow). The drawer's grade slider stays regardless, so grade is never unreachable.
+  const showGradeControl = problems.length > 0 && gradeSpan[1] > gradeSpan[0]
+
   // Installed-hold-set climbable check. The raw string is read in render (boardStore
   // re-renders this component when it changes) and is a memo dep, so toggling installed
   // sets re-derives the filter without relying on a coincidental re-render.
@@ -301,6 +307,8 @@ export function CatalogScreen() {
             inSession={sessionForBoard !== null}
             statusReady={statusReady}
             boardLists={boardLists}
+            gradeSpan={gradeSpan}
+            showGrade={showGradeControl}
           />,
           headerFilterSlot,
         )}

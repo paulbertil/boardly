@@ -10,11 +10,14 @@
 // pinned toggle rendered here.
 
 import { useState } from 'react'
-import { ListFilter, X } from 'lucide-react'
+import { ChevronDown, ListFilter, X } from 'lucide-react'
 import { describeActiveFilters } from './activeFilterChips'
+import { GradeRangeSlider } from './GradeRangeSlider'
 import { ListFilterSheet } from './ListFilterSheet'
 import { BENCHMARK_LABEL, FAVORITES_LABEL, type FilterState } from './filters'
+import { FONT_GRADES } from '../board/grades'
 import type { SavedList } from '../lists/listsTypes'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Toggle } from '@/components/ui/toggle'
 
 interface FilterPillBarProps {
@@ -26,11 +29,26 @@ interface FilterPillBarProps {
   statusReady: boolean
   /** This board's live lists — drives the "Lists" opener (hidden when empty, R4). */
   boardLists: SavedList[]
+  /** The slab's grade span [min, max] — the dropdown slider's bounds. */
+  gradeSpan: [number, number]
+  /** Whether the slab has a real range to narrow (hidden while cold / single-grade). */
+  showGrade: boolean
 }
 
-export function FilterPillBar({ filters, onChange, inSession, statusReady, boardLists }: FilterPillBarProps) {
+export function FilterPillBar({
+  filters,
+  onChange,
+  inSession,
+  statusReady,
+  boardLists,
+  gradeSpan,
+  showGrade,
+}: FilterPillBarProps) {
   const chips = describeActiveFilters(filters, { inSession, statusReady })
   const [listSheetOpen, setListSheetOpen] = useState(false)
+  const gradeLabel = filters.gradeRange
+    ? `${FONT_GRADES[filters.gradeRange[0]]}–${FONT_GRADES[filters.gradeRange[1]]}`
+    : 'Grade'
 
   return (
     // -mx-4 + px-4: cancel the header's 1rem side padding so the scroll track spans the
@@ -85,6 +103,47 @@ export function FilterPillBar({ filters, onChange, inSession, statusReady, board
           <ListFilter aria-hidden className="size-3.5" />
           Lists
         </Toggle>
+      )}
+
+      {/* Grade: a pinned control (like "Lists") that opens a dropdown slider rather than
+          toggling — so the band is set without the filter sheet. Pressed (accent fill) when
+          a sub-range is active; the label shows that range ("6A–7C"), else "Grade". Hidden
+          when the slab has no real range to narrow (showGrade). */}
+      {showGrade && (
+        <Popover>
+          <PopoverTrigger
+            render={
+              <Toggle
+                variant="outline"
+                size="sm"
+                pressed={filters.gradeRange !== null}
+                aria-label="Filter by grade"
+                className="h-6 shrink-0 gap-1 px-2 text-xs"
+              >
+                {gradeLabel}
+                <ChevronDown aria-hidden className="size-3.5" />
+              </Toggle>
+            }
+          />
+          <PopoverContent align="start" className="w-64">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-muted-foreground">Grade</span>
+              <button
+                type="button"
+                disabled={filters.gradeRange === null}
+                onClick={() => onChange({ ...filters, gradeRange: null })}
+                className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+              >
+                Reset
+              </button>
+            </div>
+            <GradeRangeSlider
+              value={filters.gradeRange}
+              span={gradeSpan}
+              onCommit={(gradeRange) => onChange({ ...filters, gradeRange })}
+            />
+          </PopoverContent>
+        </Popover>
       )}
 
       {/* Divider between the pinned toggles (controls) and the removable active-filter

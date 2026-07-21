@@ -22,10 +22,9 @@ describe('describeActiveFilters', () => {
       holdsFilter: ['3-5', '4-6', '5-7'],
     })
     const chips = describeActiveFilters(s, READY)
-    // Grade → Min-stars → Methods (option order) → Status (key order) → Holds.
-    // (Benchmark and Favorites are pinned toggles, not chips — see below.)
+    // Min-stars → Methods (option order) → Status (key order) → Holds. (Benchmark,
+    // Favorites and Grade are pinned controls, not chips — see below.)
     expect(chips.map((c) => c.id)).toEqual([
-      'grade',
       'stars',
       'method:No kickboard',
       'method:Footless',
@@ -38,8 +37,6 @@ describe('describeActiveFilters', () => {
     expect(byId['status:sent']).toBe('Sent')
     expect(byId['status:unlogged']).toBe('Not logged')
     expect(byId['holds']).toBe('Holds (3)')
-    // Grade label uses the font-grade names, not raw ordinals.
-    expect(byId['grade']).toMatch(/–/)
   })
 
   it('never emits a Favorites chip (it is a pinned toggle, not a removable pill)', () => {
@@ -47,7 +44,8 @@ describe('describeActiveFilters', () => {
     expect(chips).toEqual([])
   })
 
-  it('omits the grade chip for a full-span (null) range', () => {
+  it('never emits a grade chip (grade is the pinned "Grade" control, not a removable pill)', () => {
+    expect(describeActiveFilters(state({ gradeRange: [3, 8] }), READY)).toEqual([])
     expect(describeActiveFilters(state({ gradeRange: null }), READY)).toEqual([])
   })
 
@@ -70,14 +68,12 @@ describe('describeActiveFilters', () => {
 
   it("each chip's patch clears exactly its own filter", () => {
     const s = state({
-      gradeRange: [3, 8],
       minStars: 2,
       methods: ['Footless', 'No kickboard'],
       statusFilters: ['sent', 'unlogged'],
       holdsFilter: ['3-5'],
     })
     const byId = Object.fromEntries(describeActiveFilters(s, READY).map((c) => [c.id, c.patch]))
-    expect(byId['grade']).toEqual({ gradeRange: null })
     expect(byId['stars']).toEqual({ minStars: 0 })
     expect(byId['holds']).toEqual({ holdsFilter: [] })
     // Removing one method leaves the other selected.

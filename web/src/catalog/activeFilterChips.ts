@@ -8,9 +8,8 @@
 // appears for a filter the list isn't actually applying:
 //   - status only when `statusReady` (signed in + ascents loaded) AND not in a session
 //     (in a session applyFilters ignores `statusFilters`, using the per-member path).
-//   - grade only for a real sub-range (`gradeRange` non-null; null = full span).
+// Grade is not here — it's the pinned "Grade" control (a dropdown slider), not a chip.
 
-import { FONT_GRADES } from '../board/grades'
 import { METHOD_LABELS, STATUS_KEYS, STATUS_LABELS, type FilterState } from './filters'
 
 export interface FilterChip {
@@ -32,21 +31,15 @@ export interface ChipContext {
 
 /**
  * Removable-pill descriptors for the given filter state, in fixed category order:
- * Grade → Min-stars → Methods → Status → Holds. (Benchmark and Favorites are the pinned
- * always-on toggles, produced by the component, not here; the saved-list selection is edited
- * via the "Lists" control, also not a removable chip.)
+ * Min-stars → Methods → Status → Holds. (Benchmark and Favorites are the pinned always-on
+ * toggles, produced by the component, not here; the saved-list selection is edited via the
+ * "Lists" control and grade via the "Grade" control — neither is a removable chip.)
  */
 export function describeActiveFilters(state: FilterState, ctx: ChipContext): FilterChip[] {
   const chips: FilterChip[] = []
 
-  if (state.gradeRange) {
-    const [lo, hi] = state.gradeRange
-    chips.push({
-      id: 'grade',
-      label: `${FONT_GRADES[lo]}–${FONT_GRADES[hi]}`,
-      patch: { gradeRange: null },
-    })
-  }
+  // Grade is NOT a removable chip: it's the pinned "Grade" pill-bar control (pressed when
+  // a sub-range is set), opened to a dropdown slider and reset from within it.
 
   // Favorites is a pinned always-on toggle in the bar (like Benchmark), not a removable
   // chip — so it is intentionally NOT emitted here. Saved-list selections likewise are NOT
