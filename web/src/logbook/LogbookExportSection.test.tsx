@@ -1,0 +1,89 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { AscentsState } from './ascents'
+
+vi.mock('./ascents', () => ({ useEnsureAscentsLoaded: vi.fn() }))
+vi.mock('../catalog/catalogSync', () => ({
+  getCatalogProblemsByIds: vi.fn(async () => new Map()),
+}))
+vi.mock('./downloadFile', () => ({ downloadFile: vi.fn() }))
+
+import { useEnsureAscentsLoaded } from './ascents'
+import { downloadFile } from './downloadFile'
+import { LogbookExportSection } from './LogbookExportSection'
+
+const mockedUse = vi.mocked(useEnsureAscentsLoaded)
+const mockedDownload = vi.mocked(downloadFile)
+
+function ascent(id: string, boardLayoutId: number, sourceCatalogId: string | null): AscentsState['ascents'][number] {
+  return {
+    id,
+    date: '2026-07-20T10:00:00.000Z',
+    sourceCatalogId,
+    userProblemId: null,
+    problemName: 'P',
+    problemGrade: '6B',
+    votedGrade: '6B',
+    tries: 1,
+    stars: 0,
+    comment: '',
+    sent: true,
+    boardLayoutId,
+  }
+}
+
+function loaded(ascents: AscentsState['ascents']): AscentsState {
+  return { status: 'loaded', ascents, error: null }
+}
+
+afterEach(() => {
+  vi.clearAllMocks()
+})
+
+describe('LogbookExportSection', () => {
+  it('exports CSV for all ascents across boards, unfiltered', async () => {
+    // Covers F1 / AE1.
+    mockedUse.mockReturnValue(loaded([ascent('a1', 7, 'c1'), ascent('a2', 20, 'c2')]))
+    render(<LogbookExportSection />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
+
+    await waitFor(() => expect(mockedDownload).toHaveBeenCalledTimes(1))
+    const [filename, content] = mockedDownload.mock.calls[0]
+    expect(filename).toMatch(/\.csv$/)
+    expect(content).toContain('7')
+    expect(content).toContain('20') // both boards present
+  })
+
+  it('exports JSON', async () => {
+    mockedUse.mockReturnValue(loaded([ascent('a1', 7, 'c1')]))
+    render(<LogbookExportSection />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export JSON' }))
+
+    await waitFor(() => expect(mockedDownload).toHaveBeenCalledTimes(1))
+    const [filename, content] = mockedDownload.mock.calls[0]
+    expect(filename).toMatch(/\.json$/)
+    expect(JSON.parse(content).ascents).toHaveLength(1)
+  })
+
+  it('exports without error for an empty logbook', async () => {
+    // Covers AE4.
+    mockedUse.mockReturnValue(loaded([]))
+    render(<LogbookExportSection />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
+
+    await waitFor(() => expect(mockedDownload).toHaveBeenCalledTimes(1))
+    const [, content] = mockedDownload.mock.calls[0]
+    expect(content.trimEnd().split('\n')).toHaveLength(1) // header only
+  })
+
+  it('disables the export actions while ascents are loading', () => {
+    mockedUse.mockReturnValue({ status: 'loading', ascents: [], error: null })
+    render(<LogbookExportSection />)
+
+    expect(screen.getByRole('button', { name: 'Export CSV' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Export JSON' })).toBeDisabled()
+  })
+})

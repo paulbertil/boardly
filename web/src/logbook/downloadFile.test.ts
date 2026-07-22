@@ -7,7 +7,7 @@ describe('downloadFile', () => {
   })
 
   it('creates an object URL from a typed Blob and triggers an anchor download', () => {
-    const createObjectURL = vi.fn(() => 'blob:mock-url')
+    const createObjectURL = vi.fn((_blob: Blob) => 'blob:mock-url')
     const revokeObjectURL = vi.fn()
     vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL })
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
@@ -22,7 +22,7 @@ describe('downloadFile', () => {
   })
 
   it('revokes the object URL after triggering the download (no leak)', () => {
-    const createObjectURL = vi.fn(() => 'blob:mock-url')
+    const createObjectURL = vi.fn((_blob: Blob) => 'blob:mock-url')
     const revokeObjectURL = vi.fn()
     vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL })
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
