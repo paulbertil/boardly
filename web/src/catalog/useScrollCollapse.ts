@@ -2,15 +2,31 @@
 // sticky header, which sits inside the shell's single scroll container (.app-scroll), so
 // the host element can find its scroller via closest() — no AppLayout plumbing needed.
 //
-// Hysteresis (collapse past 64px, re-expand only under 16px) keeps the bar from
-// flickering when the list rests near the boundary. `expand()` is the tap-to-expand
-// override while scrolled: it pins the bar open until the next real scroll gesture
-// (wheel/touch drag), then the bar re-collapses.
+// Hysteresis keeps the bar from flickering near the boundary. The gap between the two
+// thresholds must exceed the folded bar's height (~72px): the header is in the scroll
+// flow, so folding it shrinks scrollHeight and scroll anchoring compensates scrollTop
+// by the same delta — a smaller gap would let that compensation cross back under
+// EXPAND_AT and oscillate open/closed. The same height-feedback is why short lists
+// (range barely past the threshold) never collapse at all: the post-fold clamp would
+// land under EXPAND_AT and bounce.
+//
+// `expand()` is the tap-to-expand override while scrolled: it pins the bar open until
+// the next real scroll gesture. Gesture detection is wheel/touchmove — never scrollTop
+// deltas (expanding grows the header and anchoring shifts scrollTop, which would
+// self-cancel the expansion) — with a grace window plus a small wheel-delta budget so
+// macOS trackpad momentum still coasting from the previous scroll can't instantly snap
+// a just-opened bar shut.
 
 import { useEffect, useRef, useState, type RefObject } from 'react'
 
-const COLLAPSE_AT = 64
+const COLLAPSE_AT = 120
 const EXPAND_AT = 16
+// Scroll range the fold hands back (bar + lit row + borders), padded.
+const FOLDED_HEIGHT_BUDGET = 80
+// Ignore gestures this soon after a tap-expand (trackpad momentum tail)...
+const MANUAL_GRACE_MS = 600
+// ...and after the grace, require this much accumulated wheel travel.
+const WHEEL_CLEAR_DELTA = 20
 
 export function useScrollCollapse(
   hostRef: RefObject<HTMLElement | null>,
@@ -32,10 +48,13 @@ export function useScrollCollapse(
       // nudge as a user scroll would instantly re-collapse the bar. Real gestures
       // are detected separately (wheel/touchmove below).
       if (manualRef.current) return
-      // Hysteresis: a collapsed bar stays collapsed until nearly at the top; an
-      // expanded bar stays expanded until clearly scrolled.
       const top = scroller.scrollTop
-      setCollapsed((prev) => (prev ? top > EXPAND_AT : top > COLLAPSE_AT))
+      // Short-list guard: only collapse when there's comfortably more scroll range
+      // than the fold gives back (see header comment).
+      const range = scroller.scrollHeight - scroller.clientHeight
+      setCollapsed((prev) =>
+        prev ? top > EXPAND_AT : top > COLLAPSE_AT && range > COLLAPSE_AT + FOLDED_HEIGHT_BUDGET,
+      )
     }
     const onScroll = () => {
       if (!raf) raf = requestAnimationFrame(measure)
@@ -49,17 +68,29 @@ export function useScrollCollapse(
   }, [hostRef])
 
   // A tap-expanded bar re-collapses on the next real scroll gesture — wheel or touch
-  // drag on the scroller — never on programmatic/anchoring scrollTop shifts.
+  // drag on the scroller — never on programmatic/anchoring scrollTop shifts. The grace
+  // window + wheel budget filter out the inertial wheel tail a trackpad keeps emitting
+  // after the fingers lift, so the chevron doesn't appear broken mid-coast.
   useEffect(() => {
     if (!manual) return
     const scroller = hostRef.current?.closest('.app-scroll')
     if (!scroller) return
-    const clear = () => setManual(false)
-    scroller.addEventListener('wheel', clear, { passive: true })
-    scroller.addEventListener('touchmove', clear, { passive: true })
+    const openedAt = performance.now()
+    let wheelBudget = 0
+    const onWheel = (e: Event) => {
+      if (performance.now() - openedAt < MANUAL_GRACE_MS) return
+      wheelBudget += Math.abs((e as WheelEvent).deltaY)
+      if (wheelBudget > WHEEL_CLEAR_DELTA) setManual(false)
+    }
+    const onTouchMove = () => {
+      if (performance.now() - openedAt < MANUAL_GRACE_MS) return
+      setManual(false)
+    }
+    scroller.addEventListener('wheel', onWheel, { passive: true })
+    scroller.addEventListener('touchmove', onTouchMove, { passive: true })
     return () => {
-      scroller.removeEventListener('wheel', clear)
-      scroller.removeEventListener('touchmove', clear)
+      scroller.removeEventListener('wheel', onWheel)
+      scroller.removeEventListener('touchmove', onTouchMove)
     }
   }, [manual, hostRef])
 

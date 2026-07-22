@@ -29,22 +29,44 @@ import { QueueDrawer } from '../sessions/QueueDrawer'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
-const PILL_POS_KEY = 'boardhang.sessionPillPos'
+// v2: coordinates went viewport-space → wrapper-relative (see clampPillPos). Deliberately
+// NOT swept by the session sign-out clear (sessionsStore.clearAllSessionState) — it's
+// per-device screen ergonomics (x/y pixels), not session content.
+const PILL_POS_KEY = 'boardhang.sessionPillPos.v2'
 const DRAG_THRESHOLD = 6
 const PILL_MARGIN = 4
 
 type PillPos = { x: number; y: number }
 
+// Offsets are relative to the pill's zero-height wrapper (its offsetParent), NOT the
+// viewport. The pill lives inside the frosted header, whose backdrop-filter makes the
+// header the containing block for positioned descendants — `position: fixed` with
+// viewport coordinates would render offset by the header's own origin (visibly wrong
+// on desktop, where the 480px shell is centered). Wrapper-relative `absolute` sidesteps
+// the containing-block trap, and the wrapper rides the sticky header, so the pill still
+// holds its on-screen spot while the list scrolls.
 function clampPillPos(x: number, y: number, el: HTMLElement | null): PillPos {
+  const wrapper = (el?.offsetParent as HTMLElement | null)?.getBoundingClientRect()
   const shell = document.querySelector('.app-shell')?.getBoundingClientRect()
   const w = el?.offsetWidth ?? 200
   const h = el?.offsetHeight ?? 32
-  const minX = (shell?.left ?? 0) + PILL_MARGIN
-  const maxX = (shell?.right ?? window.innerWidth) - w - PILL_MARGIN
-  const maxY = window.innerHeight - h - PILL_MARGIN
+  const ox = wrapper?.left ?? 0
+  const oy = wrapper?.top ?? 0
+  const minX = (shell?.left ?? 0) - ox + PILL_MARGIN
+  const maxX = (shell?.right ?? window.innerWidth) - ox - w - PILL_MARGIN
+  const minY = PILL_MARGIN - oy
+  const maxY = window.innerHeight - oy - h - PILL_MARGIN
   return {
     x: Math.min(Math.max(x, minX), Math.max(minX, maxX)),
-    y: Math.min(Math.max(y, PILL_MARGIN), Math.max(PILL_MARGIN, maxY)),
+    y: Math.min(Math.max(y, minY), Math.max(minY, maxY)),
+  }
+}
+
+function persistPos(p: PillPos) {
+  try {
+    localStorage.setItem(PILL_POS_KEY, JSON.stringify(p))
+  } catch {
+    /* ignore */
   }
 }
 
@@ -59,9 +81,16 @@ function useDraggablePill(pillRef: RefObject<HTMLDivElement | null>) {
       return null
     }
   })
-  // Re-clamp a stored position once mounted (screen may have rotated/resized since).
+  const posRef = useRef<PillPos | null>(null)
+  posRef.current = pos
+
+  // Re-clamp on mount and on every viewport change (rotation, resize, keyboard) so a
+  // stored or parked position can never strand the pill off-screen while mounted.
   useEffect(() => {
-    setPos((p) => (p ? clampPillPos(p.x, p.y, pillRef.current) : p))
+    const reclamp = () => setPos((p) => (p ? clampPillPos(p.x, p.y, pillRef.current) : p))
+    reclamp()
+    window.addEventListener('resize', reclamp)
+    return () => window.removeEventListener('resize', reclamp)
   }, [pillRef])
 
   const drag = useRef<{ startX: number; startY: number; originX: number; originY: number; active: boolean } | null>(
@@ -69,15 +98,36 @@ function useDraggablePill(pillRef: RefObject<HTMLDivElement | null>) {
   )
   const suppressClick = useRef(false)
 
+  // If the pill unmounts mid-drag (session ended remotely, route change), endDrag never
+  // runs — flush the last position so the drag isn't silently discarded.
+  useEffect(
+    () => () => {
+      if (drag.current?.active && posRef.current) persistPos(posRef.current)
+    },
+    [],
+  )
+
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (!e.isPrimary) return
-    const rect = pillRef.current?.getBoundingClientRect()
-    if (!rect) return
-    drag.current = { startX: e.clientX, startY: e.clientY, originX: rect.left, originY: rect.top, active: false }
+    // A stale flag from a click-less touch drag (browsers fire no click after a
+    // beyond-slop drag) must not swallow this fresh tap.
+    suppressClick.current = false
+    const el = pillRef.current
+    if (!el) return
+    // offsetLeft/offsetTop are wrapper-relative for the absolutely-positioned pill —
+    // the same space clampPillPos works in.
+    drag.current = { startX: e.clientX, startY: e.clientY, originX: el.offsetLeft, originY: el.offsetTop, active: false }
   }
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     const d = drag.current
     if (!d) return
+    // No button held: the press ended off-pill before we captured (capture is only
+    // taken past the threshold), so this is a dead gesture surfacing on hover — drop
+    // it instead of letting the pill chase a button-less cursor.
+    if (e.buttons === 0) {
+      drag.current = null
+      return
+    }
     const dx = e.clientX - d.startX
     const dy = e.clientY - d.startY
     if (!d.active) {
@@ -88,19 +138,9 @@ function useDraggablePill(pillRef: RefObject<HTMLDivElement | null>) {
     }
     setPos(clampPillPos(d.originX + dx, d.originY + dy, pillRef.current))
   }
-  const endDrag = () => {
-    if (drag.current?.active) {
-      setPos((p) => {
-        if (p) {
-          try {
-            localStorage.setItem(PILL_POS_KEY, JSON.stringify(p))
-          } catch {
-            /* ignore */
-          }
-        }
-        return p
-      })
-    }
+  const endDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!e.isPrimary) return
+    if (drag.current?.active && posRef.current) persistPos(posRef.current)
     drag.current = null
   }
   // Swallow the click that follows a real drag, so dropping the pill doesn't expand it.
@@ -150,13 +190,12 @@ export function SessionBarPill({
         {...handlers}
         style={pos ? { left: pos.x, top: pos.y } : undefined}
         className={cn(
-          'z-30 flex h-8 items-center gap-1 rounded-full border border-border bg-muted/90 px-1 shadow-sm backdrop-blur-md duration-200 animate-in fade-in zoom-in-95 motion-reduce:animate-none',
+          'absolute z-30 flex h-8 items-center gap-1 rounded-full border border-border bg-muted/90 px-1 shadow-sm backdrop-blur-md duration-200 animate-in fade-in zoom-in-95 motion-reduce:animate-none',
           // touch-action:none so dragging the pill pans the pill, not the list.
           'touch-none select-none',
-          // Default dock: centered, 8px below the header's bottom border (wrapper →
-          // border is ~9px of header padding, hence top-4). Margin-auto centering,
-          // not translate — tw-animate's enter transform would fight it.
-          pos ? 'fixed' : 'absolute inset-x-0 top-4 mx-auto w-fit max-w-full',
+          // Default dock: centered, 8px below the header's bottom border. Margin-auto
+          // centering, not translate — tw-animate's enter transform would fight it.
+          !pos && 'inset-x-0 top-4 mx-auto w-fit max-w-full',
         )}
       >
         <button

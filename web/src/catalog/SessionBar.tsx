@@ -199,9 +199,17 @@ function CollapsibleActiveBar({
 }) {
   const { activeSession, roster } = useSessions()
   const hostRef = useRef<HTMLDivElement>(null)
+  const fullBarRef = useRef<HTMLDivElement>(null)
   const { collapsed, expand } = useScrollCollapse(hostRef)
   const litId = activeSession?.litProblemId ?? null
   const litProblem = useResolvedProblem(litId)
+
+  // Expanding unmounts the pill the user just activated — without a focus handoff,
+  // keyboard focus would drop to <body> and Tab would restart from the page top.
+  const expandAndFocus = () => {
+    expand()
+    requestAnimationFrame(() => fullBarRef.current?.focus())
+  }
 
   if (!activeSession) return null
 
@@ -215,8 +223,14 @@ function CollapsibleActiveBar({
       >
         {/* inert while collapsed: the full bar's controls (rename, ⋯ menu) leave the
             tab order instead of being focusable inside a zero-height clip. */}
-        <div id="session-bar-full" className="overflow-hidden" inert={collapsed || undefined}>
-          <ActiveBar board={board} onShare={onShare} onOpenProblem={onOpenProblem} />
+        <div
+          ref={fullBarRef}
+          id="session-bar-full"
+          tabIndex={-1}
+          className="overflow-hidden outline-none"
+          inert={collapsed || undefined}
+        >
+          <ActiveBar board={board} litProblem={litProblem} onShare={onShare} onOpenProblem={onOpenProblem} />
         </div>
       </div>
       {collapsed && (
@@ -226,7 +240,7 @@ function CollapsibleActiveBar({
           rosterCount={roster.length}
           litProblemId={litId}
           litProblem={litProblem}
-          onExpand={expand}
+          onExpand={expandAndFocus}
           onShare={onShare}
           onOpenProblem={onOpenProblem}
         />
@@ -237,10 +251,13 @@ function CollapsibleActiveBar({
 
 function ActiveBar({
   board,
+  litProblem,
   onShare,
   onOpenProblem,
 }: {
   board: CatalogBoardDef
+  /** Resolved lit problem, threaded from CollapsibleActiveBar so it's fetched once. */
+  litProblem: CatalogProblem | null
   onShare: () => void
   onOpenProblem: (id: string, stack?: CatalogProblem[]) => void
 }) {
@@ -349,6 +366,7 @@ function ActiveBar({
     {activeSession.litProblemId && (
       <LitProblemRow
         problemId={activeSession.litProblemId}
+        problem={litProblem}
         litBy={activeSession.litBy ?? null}
         roster={roster}
         selfId={selfId}
@@ -364,21 +382,22 @@ function ActiveBar({
  *  Tap opens the problem detail over the default pager domain — it never re-lights the board. */
 function LitProblemRow({
   problemId,
+  problem,
   litBy,
   roster,
   selfId,
   onOpenProblem,
 }: {
   problemId: string
+  /** Resolved from the offline catalog cache by CollapsibleActiveBar (one fetch for bar
+   *  + pill). Null while unresolved — a co-member may have lit a climb this device
+   *  hasn't synced yet. */
+  problem: CatalogProblem | null
   litBy: string | null
   roster: SessionMember[]
   selfId: string | null
   onOpenProblem: (id: string) => void
 }) {
-  // Resolve id → problem from the offline catalog cache (mirrors useActiveQueueProblems).
-  // Null while unresolved (a co-member may have lit a climb this device hasn't synced yet).
-  const problem = useResolvedProblem(problemId)
-
   const lighter = litBy ? roster.find((m) => m.userId === litBy) : undefined
   const byLabel = litBy && litBy === selfId ? 'you' : lighter ? memberLabel(lighter) : null
 

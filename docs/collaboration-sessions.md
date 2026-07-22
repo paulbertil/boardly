@@ -93,8 +93,16 @@ keeps it alive for everyone; the 24h backstop only fires once *all* members go q
   (in-context bar: rename, members, Share, Leave, plus stacked cross-device Resume rows for
   this board above StartBar; a single **`+`** launcher button when solo. While a session for the
   routed board is active, CatalogScreen portals the bar into the shell's sticky-header slot —
-  `shell/headerSessionSlot.ts`, issue #98 — so it stays visible as the list scrolls; the
-  start/resume states stay in-flow), `sessions/ShareSession.tsx` (QR +
+  `shell/headerSessionSlot.ts`, issue #98 — so the crew controls stay reachable as the list
+  scrolls. To give the viewport back, the full bar only shows near the top of the list: past
+  ~120px of scroll it folds away (`catalog/useScrollCollapse.ts` — hysteresis so it never
+  flickers at the boundary) and `catalog/SessionBarPill.tsx` takes over — a floating pill
+  showing the lit problem (tap opens its detail), Queue/Share, and a chevron that re-expands
+  the full bar in place until the next real scroll gesture. The pill is draggable anywhere in
+  the shell and its spot persists per device in `localStorage` (`boardhang.sessionPillPos.v2`
+  — deliberately NOT swept by the sign-out session clear; it's screen ergonomics, not session
+  content). The start/resume states stay in-flow and never collapse),
+  `sessions/ShareSession.tsx` (QR +
   copy/share of the join link), `shell/SessionPill.tsx` (global pill on every non-catalog route,
   with roster + owner remove-member + Leave), `sessions/JoinSession.tsx` (`/session/join/$token`
   — sign-in → consent → join → land in the board catalog).

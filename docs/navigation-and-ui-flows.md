@@ -184,7 +184,11 @@ via a `stripSearchParams` middleware so URLs stay clean; `validateSearch` re-fil
   for the `SessionPill` (shown when a session is active, except on the catalog where `SessionBar`
   owns it), then two portal slots the catalog fills: the **filter-pill slot** (`headerFilterSlot`)
   and the **session-bar slot** (`headerSessionSlot` — `SessionBar` portals in while a session for
-  the routed board is active, so the crew bar stays visible as the list scrolls, issue #98).
+  the routed board is active, so the crew controls stay reachable as the list scrolls, issue #98.
+  Past ~120px of scroll the full bar folds away and a floating, draggable `SessionBarPill` takes
+  over — lit problem + Queue/Share + a chevron that re-expands the bar in place; see
+  `catalog/useScrollCollapse.ts` for the hysteresis and gesture rules, and
+  [collaboration-sessions.md](collaboration-sessions.md) for the pill's behavior).
   Empty slots collapse (`.app-header-slot:empty`). The bottom `Navigation` stays a solid
   grid-row bar.
 - **Angle** comes from `?angle` (never a fresh `getAngle()` in render); `CatalogScreen` mirrors the
