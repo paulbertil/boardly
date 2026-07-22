@@ -8,10 +8,10 @@
 // screen portals the bar into the shell's sticky header slot (headerSessionSlot, issue
 // #98) so it stays visible as the list scrolls; the start/resume states stay in-flow.
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { Lightbulb, MoreHorizontal, Plus, Share2, Users, X } from 'lucide-react'
 import type { CatalogBoardDef } from '../board/boards'
-import { getCatalogProblemsByIds, type CatalogProblem } from './catalogSync'
+import { type CatalogProblem } from './catalogSync'
 import { QueueDrawer } from '../sessions/QueueDrawer'
 import { boardShortLabel } from '../lists/listsTypes'
 import { useAuth } from '../auth/AuthProvider'
@@ -35,6 +35,9 @@ import {
 import { MemberAvatar } from '../sessions/MemberAvatar'
 import { ShareSession } from '../sessions/ShareSession'
 import { ScanToJoin } from '../sessions/ScanToJoin'
+import { useScrollCollapse } from './useScrollCollapse'
+import { useResolvedProblem } from './useResolvedProblem'
+import { SessionBarPill } from './SessionBarPill'
 import { AvatarGroup, AvatarGroupCount } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -69,7 +72,11 @@ export function SessionBar({ board, onOpenProblem }: SessionBarProps) {
   return (
     <>
       {activeForThisBoard ? (
-        <ActiveBar board={board} onShare={() => setShareOpen(true)} onOpenProblem={onOpenProblem} />
+        <CollapsibleActiveBar
+          board={board}
+          onShare={() => setShareOpen(true)}
+          onOpenProblem={onOpenProblem}
+        />
       ) : (
         <>
           {/* In-context Resume: when a live session for THIS board exists on the server (e.g.
@@ -178,12 +185,79 @@ function StartBar({
   )
 }
 
-function ActiveBar({
+/** Scroll-collapse shell around ActiveBar (+ its LitProblemRow): full bar at the top
+ *  of the list, the floating SessionBarPill once scrolled. The pill's chevron
+ *  re-expands in place; the next real scroll gesture re-collapses. */
+function CollapsibleActiveBar({
   board,
   onShare,
   onOpenProblem,
 }: {
   board: CatalogBoardDef
+  onShare: () => void
+  onOpenProblem: (id: string, stack?: CatalogProblem[]) => void
+}) {
+  const { activeSession, roster } = useSessions()
+  const hostRef = useRef<HTMLDivElement>(null)
+  const fullBarRef = useRef<HTMLDivElement>(null)
+  const { collapsed, expand } = useScrollCollapse(hostRef)
+  const litId = activeSession?.litProblemId ?? null
+  const litProblem = useResolvedProblem(litId)
+
+  // Expanding unmounts the pill the user just activated — without a focus handoff,
+  // keyboard focus would drop to <body> and Tab would restart from the page top.
+  const expandAndFocus = () => {
+    expand()
+    requestAnimationFrame(() => fullBarRef.current?.focus())
+  }
+
+  if (!activeSession) return null
+
+  return (
+    <div ref={hostRef}>
+      {/* Animate grid-template-rows (0fr ↔ 1fr), not height — the browser interpolates
+          the row track, so auto-height content collapses smoothly with no measured px. */}
+      <div
+        className="grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none"
+        style={{ gridTemplateRows: collapsed ? '0fr' : '1fr' }}
+      >
+        {/* inert while collapsed: the full bar's controls (rename, ⋯ menu) leave the
+            tab order instead of being focusable inside a zero-height clip. */}
+        <div
+          ref={fullBarRef}
+          id="session-bar-full"
+          tabIndex={-1}
+          className="overflow-hidden outline-none"
+          inert={collapsed || undefined}
+        >
+          <ActiveBar board={board} litProblem={litProblem} onShare={onShare} onOpenProblem={onOpenProblem} />
+        </div>
+      </div>
+      {collapsed && (
+        <SessionBarPill
+          board={board}
+          sessionName={activeSession.name || 'Session'}
+          rosterCount={roster.length}
+          litProblemId={litId}
+          litProblem={litProblem}
+          onExpand={expandAndFocus}
+          onShare={onShare}
+          onOpenProblem={onOpenProblem}
+        />
+      )}
+    </div>
+  )
+}
+
+function ActiveBar({
+  board,
+  litProblem,
+  onShare,
+  onOpenProblem,
+}: {
+  board: CatalogBoardDef
+  /** Resolved lit problem, threaded from CollapsibleActiveBar so it's fetched once. */
+  litProblem: CatalogProblem | null
   onShare: () => void
   onOpenProblem: (id: string, stack?: CatalogProblem[]) => void
 }) {
@@ -201,7 +275,7 @@ function ActiveBar({
 
   return (
     <>
-    <div className="flex items-center gap-2 border-b border-border bg-muted/60 px-3 py-2 text-sm">
+    <div className="flex items-center gap-2 border-b border-border px-3 py-2 text-sm">
       <SessionName board={board} name={activeSession.name} />
 
       {/* shadcn AvatarGroup: overlaps the avatars and applies the ring-2 ring-background
@@ -292,6 +366,7 @@ function ActiveBar({
     {activeSession.litProblemId && (
       <LitProblemRow
         problemId={activeSession.litProblemId}
+        problem={litProblem}
         litBy={activeSession.litBy ?? null}
         roster={roster}
         selfId={selfId}
@@ -307,31 +382,22 @@ function ActiveBar({
  *  Tap opens the problem detail over the default pager domain — it never re-lights the board. */
 function LitProblemRow({
   problemId,
+  problem,
   litBy,
   roster,
   selfId,
   onOpenProblem,
 }: {
   problemId: string
+  /** Resolved from the offline catalog cache by CollapsibleActiveBar (one fetch for bar
+   *  + pill). Null while unresolved — a co-member may have lit a climb this device
+   *  hasn't synced yet. */
+  problem: CatalogProblem | null
   litBy: string | null
   roster: SessionMember[]
   selfId: string | null
   onOpenProblem: (id: string) => void
 }) {
-  // Resolve id → problem from the offline catalog cache (mirrors useActiveQueueProblems).
-  // Null while unresolved (a co-member may have lit a climb this device hasn't synced yet).
-  const [problem, setProblem] = useState<CatalogProblem | null>(null)
-  useEffect(() => {
-    let cancelled = false
-    setProblem(null)
-    void getCatalogProblemsByIds([problemId]).then((m) => {
-      if (!cancelled) setProblem(m.get(problemId) ?? null)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [problemId])
-
   const lighter = litBy ? roster.find((m) => m.userId === litBy) : undefined
   const byLabel = litBy && litBy === selfId ? 'you' : lighter ? memberLabel(lighter) : null
 
@@ -339,10 +405,10 @@ function LitProblemRow({
     <button
       type="button"
       onClick={() => onOpenProblem(problemId)}
-      className="flex w-full items-center gap-2 border-b border-border bg-muted/60 px-3 py-1.5 text-left text-sm hover:bg-muted"
+      className="flex w-full items-center gap-2 px-3 py-1 text-left text-sm hover:bg-muted"
       title="Open the problem that’s on the wall"
     >
-      <Lightbulb className="size-4 shrink-0 fill-current text-benchmark" aria-hidden />
+      <Lightbulb className="size-4 shrink-0 fill-current text-primary" aria-hidden />
       <span className="min-w-0 flex-1 truncate">
         <span className="text-muted-foreground">On the wall: </span>
         <span className="font-medium">{problem ? problem.name : 'a climb'}</span>
