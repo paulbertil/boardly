@@ -17,6 +17,24 @@ bespoke one or hand-rolling CSS.
   new one-off CSS.
 - **Imports** → use the `@/` alias (`@/components/ui/button`, `@/lib/utils`).
 
+## Dependencies — pin exact versions (no `^`/`~`)
+
+**Every version in `package.json` must be exact** — a bare `1.6.0`, never `^1.6.0`
+or `~1.6.0`. This protects **developer machines**, not end users: a hijacked patch/minor
+release runs its install scripts (or ships code we then import) on whoever next runs
+`npm install`, and recent npm supply-chain attacks target devs' tokens, credentials, and
+wallets. Ranges let such a release land silently; an exact pin + committed lockfile means
+a routine install can't auto-jump into a compromised version, and every upgrade is a
+deliberate, reviewed commit.
+
+- **Adding a dep** → after `npm install <name>`, rewrite its `package.json` entry to the
+  exact version npm resolved (check `package-lock.json`), so no caret/tilde is left behind.
+- **Never** strip a caret by hand to its range *floor* (`^1.5.0` → `1.5.0`): the floor is
+  often older than what's installed and would downgrade on the next clean install. Pin to
+  the **lockfile's resolved version** instead.
+- **Upgrading** → bump the exact version in `package.json`, run `npm install`, commit the
+  `package.json` + `package-lock.json` change together.
+
 ## Deploying to Vercel
 
 The web app is hosted on Vercel as the **`boardly`** project (org
