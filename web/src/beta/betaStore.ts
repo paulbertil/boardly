@@ -72,6 +72,10 @@ async function withOwnership(id: string, videos: BetaVideo[]): Promise<BetaVideo
 async function fetchBeta(id: string): Promise<void> {
   if (inflight.has(id)) return
   inflight.add(id)
+  // The identity this fetch resolves ownership under. If it changes mid-flight (an owner-scoped
+  // query is two awaits deep), syncBetaIdentity has invalidated us — drop the result rather than
+  // writing stale isMine back into the freshly-cleared cache (the re-prime fetch owns the entry).
+  const fetchedUnder = lastIdentity
   if (!cache.has(id)) set(id, LOADING)
   try {
     if (!supabase) {
@@ -86,14 +90,17 @@ async function fetchBeta(id: string): Promise<void> {
       .eq('status', 'approved')
       .eq('deleted', false)
       .order('views', { ascending: false })
+    if (lastIdentity !== fetchedUnder) return
     if (error) {
       set(id, { status: 'error', videos: [], error: error.message })
       return
     }
     const rows = ((data ?? []) as Omit<BetaVideo, 'isMine'>[]).map((v) => ({ ...v, isMine: false }))
     const videos = await withOwnership(id, rows)
+    if (lastIdentity !== fetchedUnder) return
     set(id, { status: 'ready', videos, error: null })
   } catch (e) {
+    if (lastIdentity !== fetchedUnder) return
     set(id, { status: 'error', videos: [], error: e instanceof Error ? e.message : 'load failed' })
   } finally {
     inflight.delete(id)
@@ -147,9 +154,15 @@ export function syncBetaIdentity(userId: string | null): void {
   const next = userId ?? ''
   if (next === lastIdentity) return
   lastIdentity = next
+  // Re-prime, don't just clear: useBetaVideos only fetches from a mount effect keyed on the
+  // problem id, so a bare clear() would strand a still-mounted strip (e.g. the sign-in-to-add-a-beta
+  // flow, where BetaVideos never unmounts) on the loading skeleton — nothing would re-fetch it.
+  // Capture the open problems, clear, then re-fetch each so mounted strips re-resolve ownership.
+  const ids = [...cache.keys()]
   cache.clear()
   inflight.clear()
   notify()
+  for (const id of ids) void fetchBeta(id)
 }
 
 /** Test hook: clear the module-level singleton between cases. */

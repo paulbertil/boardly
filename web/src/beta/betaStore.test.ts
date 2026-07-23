@@ -14,6 +14,7 @@ let nextInsertResult: { error: unknown } = { error: null }
 let nextSession: { data: { session: { user: { id: string } } | null } } = {
   data: { session: { user: { id: 'user-1' } } },
 }
+let getSessionThrows = false
 const insertSpy = vi.fn()
 const ownSelectSpy = vi.fn()
 vi.mock('../supabase/client', () => {
@@ -34,7 +35,10 @@ vi.mock('../supabase/client', () => {
   return {
     supabase: {
       from: () => builder,
-      auth: { getSession: () => Promise.resolve(nextSession) },
+      auth: {
+        getSession: () =>
+          getSessionThrows ? Promise.reject(new Error('session boom')) : Promise.resolve(nextSession),
+      },
     },
     isConfigured: true,
   }
@@ -61,6 +65,7 @@ beforeEach(() => {
   nextOwnResult = { data: [], error: null }
   nextInsertResult = { error: null }
   nextSession = { data: { session: { user: { id: 'user-1' } } } }
+  getSessionThrows = false
 })
 afterEach(() => {
   vi.clearAllMocks()
@@ -160,24 +165,35 @@ describe('betaStore ownership (isMine + mine-first)', () => {
     await waitFor(() => expect(result.current.status).toBe('ready'))
     expect(ownSelectSpy).not.toHaveBeenCalled()
   })
+
+  it('degrades to the plain strip when the ownership lookup THROWS (not just errors)', async () => {
+    nextResult = { data: [vid('b', 9), vid('a', 5)], error: null }
+    getSessionThrows = true // withOwnership's try/catch must swallow a thrown rejection
+    const { result } = renderHook(() => useBetaVideos('p1'))
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    expect(result.current.videos.map((v) => v.id)).toEqual(['b', 'a'])
+    expect(result.current.videos.every((v) => !v.isMine)).toBe(true)
+  })
 })
 
 describe('syncBetaIdentity', () => {
-  it('drops the cache on an identity change so ownership re-resolves', async () => {
-    // First open under user-1, who owns 'mine'. Data is views-desc (b 9, mine 3).
+  it('re-primes a STILL-MOUNTED strip on identity change (no stuck skeleton, F1)', async () => {
+    // A mounted strip: user-1 owns 'mine'. Data is views-desc (b 9, mine 3).
     nextResult = { data: [vid('b', 9), vid('mine', 3)], error: null }
     nextOwnResult = { data: [{ id: 'mine' }], error: null }
-    const first = renderHook(() => useBetaVideos('p1'))
-    await waitFor(() => expect(first.result.current.status).toBe('ready'))
-    expect(first.result.current.videos.map((v) => v.id)).toEqual(['mine', 'b'])
+    const { result } = renderHook(() => useBetaVideos('p1')) // stays mounted across the switch
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    expect(result.current.videos.map((v) => v.id)).toEqual(['mine', 'b'])
 
-    // A different user signs in → cache cleared → next open re-resolves (owns nothing here).
-    act(() => syncBetaIdentity('user-2'))
+    // Identity switches to user-2 (owns nothing) — mirror production: session + sync id change
+    // together, and set them BEFORE the sync so the re-prime fetch sees the new values.
+    nextSession = { data: { session: { user: { id: 'user-2' } } } }
     nextOwnResult = { data: [], error: null }
-    const second = renderHook(() => useBetaVideos('p1'))
-    await waitFor(() => expect(second.result.current.status).toBe('ready'))
-    expect(second.result.current.videos.map((v) => v.id)).toEqual(['b', 'mine'])
-    expect(second.result.current.videos.every((v) => !v.isMine)).toBe(true)
+    act(() => syncBetaIdentity('user-2'))
+    // The SAME mounted hook must re-resolve to ready (not hang on the loading skeleton).
+    await waitFor(() => expect(result.current.videos.map((v) => v.id)).toEqual(['b', 'mine']))
+    expect(result.current.status).toBe('ready')
+    expect(result.current.videos.every((v) => !v.isMine)).toBe(true)
   })
 
   it('is a no-op for the same identity (keeps the warm cache)', async () => {
