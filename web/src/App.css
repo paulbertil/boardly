@@ -23,7 +23,10 @@
 .app-header {
   position: sticky;
   top: 0;
-  z-index: 20;
+  /* Above in-page floating chrome (the catalog's sticky FAB cluster at z-30 — the
+     draggable session pill is a header descendant, so it inherits this stacking
+     context and must win against those), below portaled overlays at z-50. */
+  z-index: 40;
   margin-inline: -1rem;
   display: flex;
   flex-direction: column;

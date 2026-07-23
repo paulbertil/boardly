@@ -49,7 +49,10 @@ function renderPill(overrides: Partial<Parameters<typeof SessionBarPill>[0]> = {
 
 // jsdom lacks a constructable PointerEvent (and fireEvent's fallback drops isPrimary);
 // fake one carrying just what the drag hook reads — mirrors usePullToRefresh.test.tsx.
-function pointer(type: string, props: { clientX: number; clientY: number; buttons: number }): Event {
+function pointer(
+  type: string,
+  props: { clientX: number; clientY: number; buttons: number; pointerId?: number; isPrimary?: boolean },
+): Event {
   const e = new Event(type, { bubbles: true, cancelable: true })
   Object.assign(e, { isPrimary: true, pointerId: 1, ...props })
   return e
@@ -87,8 +90,19 @@ describe('SessionBarPill', () => {
     const { pill, mainButton, onOpenProblem } = renderPill()
     down(pill, 0, 0)
     move(pill, 25, 25)
+
+    // Live path: the gesture rides a compositor transform with the blur suspended —
+    // NOT React state — so assert the imperative styles mid-drag...
+    expect(pill.style.transform).toMatch(/translate3d/)
+    expect(pill.style.willChange).toBe('transform')
+    expect(pill.style.backdropFilter).toBe('none')
+
     up(pill, 25, 25)
 
+    // ...and that release clears every gesture-scoped style before committing.
+    expect(pill.style.transform).toBe('')
+    expect(pill.style.willChange).toBe('')
+    expect(pill.style.backdropFilter).toBe('')
     expect(pill.style.left).not.toBe('')
     const stored = localStorage.getItem('boardhang.sessionPillPos.v2')
     expect(stored).not.toBeNull()
@@ -114,6 +128,28 @@ describe('SessionBarPill', () => {
     up(pill, 30, 0)
     fireEvent.click(mainButton)
     expect(onOpenProblem).toHaveBeenCalledWith('p1')
+  })
+
+  it('a second finger can neither hijack nor end the primary drag', () => {
+    const { pill } = renderPill()
+    down(pill, 0, 0) // finger A (pointerId 1)
+
+    // Finger B (pointerId 2) moves far — must not activate A's gesture with B's coords.
+    fireEvent(pill, pointer('pointermove', { clientX: 60, clientY: 60, buttons: 1, pointerId: 2, isPrimary: false }))
+    expect(pill.style.transform).toBe('')
+
+    move(pill, 25, 25) // finger A activates for real
+    expect(pill.style.transform).toMatch(/translate3d/)
+
+    // B's release must not end (and half-clean) A's gesture...
+    fireEvent(pill, pointer('pointerup', { clientX: 60, clientY: 60, buttons: 0, pointerId: 2, isPrimary: false }))
+    expect(pill.style.transform).toMatch(/translate3d/)
+
+    // ...only A's release does, restoring styles and committing.
+    up(pill, 25, 25)
+    expect(pill.style.transform).toBe('')
+    expect(pill.style.willChange).toBe('')
+    expect(localStorage.getItem('boardhang.sessionPillPos.v2')).not.toBeNull()
   })
 
   it('a button-less hover move after an aborted press never starts a drag', () => {

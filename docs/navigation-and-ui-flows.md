@@ -190,7 +190,9 @@ via a `stripSearchParams` middleware so URLs stay clean; `validateSearch` re-fil
   `catalog/useScrollCollapse.ts` for the hysteresis and gesture rules, and
   [collaboration-sessions.md](collaboration-sessions.md) for the pill's behavior).
   Empty slots collapse (`.app-header-slot:empty`). The bottom `Navigation` stays a solid
-  grid-row bar.
+  grid-row bar. Stacking convention: the header (and everything hanging off it, like the
+  session pill) sits at `z-40` — above in-page floating chrome such as the catalog's
+  sticky FAB cluster (`z-30`), below portaled overlays (drawers/dialogs/popovers, `z-50`).
 - **Angle** comes from `?angle` (never a fresh `getAngle()` in render); `CatalogScreen` mirrors the
   resolved angle back into `boardStore` so `/boards` stays coherent with a deep link.
 - **Problem drawer**: opening pushes history (Back closes it), paging/swiping `replace`s (URL tracks
