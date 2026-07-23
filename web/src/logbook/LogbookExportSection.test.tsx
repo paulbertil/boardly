@@ -120,7 +120,7 @@ describe('LogbookExportSection', () => {
     expect(mockedLoad).toHaveBeenCalledTimes(1)
   })
 
-  it('prompts to sign in (no export buttons) when signed out, and the CTA opens the sign-in flow', () => {
+  it('shows a sign-in row (no export buttons) when signed out, and it opens the sign-in flow', () => {
     mockedAuth.mockReturnValue({
       status: 'signedOut',
       isRestoring: false,
@@ -128,13 +128,13 @@ describe('LogbookExportSection', () => {
     mockedUse.mockReturnValue({ status: 'idle', ascents: [], error: null })
     render(<LogbookExportSection />)
 
-    expect(screen.getByText(/sign in to export your logbook/i)).toBeInTheDocument()
+    expect(screen.getByText(/sign in to download your ascents/i)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Export CSV' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Export JSON' })).toBeNull()
 
-    // The dialog is closed until the CTA is clicked.
+    // The whole row is the CTA; clicking it opens the sign-in dialog.
     expect(screen.queryByText('sign-in dialog')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    fireEvent.click(screen.getByRole('button', { name: /export your logbook/i }))
     expect(screen.getByText('sign-in dialog')).toBeInTheDocument()
   })
 

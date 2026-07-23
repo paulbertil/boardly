@@ -4,6 +4,7 @@
 // time. Serialization is ./logbookExport (pure); the download side effect is ./downloadFile.
 
 import { useState } from 'react'
+import { ChevronRight, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { useAuth } from '../auth/AuthProvider'
@@ -18,12 +19,12 @@ export function LogbookExportSection() {
   const { status, ascents, error } = useEnsureAscentsLoaded()
   const [busy, setBusy] = useState<ExportFormat | null>(null)
   const [showSignIn, setShowSignIn] = useState(false)
-  // Signed out there's nothing to export (the store resets to empty), so prompt sign-in
-  // rather than showing permanently-disabled buttons. Wait out session restore first.
-  const signedOut = !isRestoring && authStatus === 'signedOut'
   // Gate until the store settles so we never export against a not-yet-loaded set. An
   // empty loaded logbook is fine — it exports a header-only CSV / empty envelope.
   const ready = status === 'loaded'
+  // Signed out there's nothing to export (the store resets to empty). Wait out session
+  // restore, then prompt sign-in instead of showing permanently-disabled buttons.
+  const signedOut = !isRestoring && authStatus === 'signedOut'
 
   async function handleExport(format: ExportFormat) {
     setBusy(format)
@@ -51,6 +52,36 @@ export function LogbookExportSection() {
     }
   }
 
+  // Signed out: a single sign-in row, mirroring the "Import from MoonBoard" row below it.
+  if (signedOut) {
+    return (
+      <Card>
+        <CardContent className="p-0">
+          <button
+            type="button"
+            onClick={() => setShowSignIn(true)}
+            className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-accent/50"
+          >
+            <Download className="size-5 shrink-0 text-muted-foreground" />
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium">Export your logbook</div>
+              <div className="mt-0.5 text-xs text-muted-foreground">
+                Sign in to download your ascents as CSV or JSON.
+              </div>
+            </div>
+            <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+          </button>
+          <SignInDialog
+            open={showSignIn}
+            onOpenChange={setShowSignIn}
+            title="Sign in to export your logbook"
+            hideIntro
+          />
+        </CardContent>
+      </Card>
+    )
+  }
+
   return (
     <Card>
       <CardContent className="space-y-3">
@@ -61,22 +92,7 @@ export function LogbookExportSection() {
             JSON for a complete backup.
           </p>
         </div>
-        {signedOut ? (
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Sign in to export your logbook — your ascents sync with your account.
-            </p>
-            <Button variant="outline" onClick={() => setShowSignIn(true)}>
-              Sign in
-            </Button>
-            <SignInDialog
-              open={showSignIn}
-              onOpenChange={setShowSignIn}
-              title="Sign in to export your logbook"
-              hideIntro
-            />
-          </div>
-        ) : status === 'error' ? (
+        {status === 'error' ? (
           <div className="space-y-2">
             <p className="text-sm text-destructive" role="alert">
               Couldn't load your logbook{error ? `: ${error}` : ''}.
