@@ -19,14 +19,16 @@ import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Slider } from '@/components/ui/slider'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
 import { useEnsureAscentsLoaded, type Ascent } from './ascents'
 import { AscentRow } from './AscentRow'
 import { GradePyramid } from './GradePyramid'
 import { LogAscentSheet, type LogTarget } from './LogAscentSheet'
 import { MoonBoardImportBanner } from './MoonBoardImportBanner'
+import { FONT_GRADES } from '../board/grades'
 import { priorHistoryIds } from './problemHistory'
-import { filterByDayRange, sessions } from './sessions'
+import { filterByDayRange, filterByGradeRange, loggedGradeSpan, sessions } from './sessions'
 
 const routeApi = getRouteApi('/logbook')
 
@@ -51,17 +53,25 @@ export function LogbookScreen() {
   const [target, setTarget] = useState<LogTarget | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [catalogById, setCatalogById] = useState<Map<string, CatalogProblem>>(new Map())
-  // Date-span filter (local days, inclusive) narrowing the pyramid + session list.
+  // Filters narrowing the pyramid + session list: a date span (local days, inclusive)
+  // and a grade-ordinal range (null = full span, mirroring the catalog filter).
   const [dateRange, setDateRange] = useState<DateRange | undefined>()
+  const [gradeRange, setGradeRange] = useState<[number, number] | null>(null)
 
   // Board-scoped view, mirroring iOS (the pyramid + list follow the active board).
   const boardAscents = useMemo(
     () => ascents.filter((a) => a.boardLayoutId === activeBoard.layoutId),
     [ascents, activeBoard.layoutId],
   )
+  // The grade slider's domain: the span of grades actually logged on this board.
+  const gradeSpan = useMemo(() => loggedGradeSpan(boardAscents), [boardAscents])
   const filteredAscents = useMemo(
-    () => filterByDayRange(boardAscents, dateRange?.from, dateRange?.to),
-    [boardAscents, dateRange],
+    () =>
+      filterByGradeRange(
+        filterByDayRange(boardAscents, dateRange?.from, dateRange?.to),
+        gradeRange,
+      ),
+    [boardAscents, dateRange, gradeRange],
   )
 
   // Enrich rows with cached catalog entries (setter / benchmark / thumbnail). Scoped to
@@ -234,49 +244,94 @@ export function LogbookScreen() {
 
       <MoonBoardImportBanner />
 
-      {/* Date-span filter — a calendar range picker narrowing the pyramid + sessions. */}
-      <div className="mb-3 flex items-center gap-1">
-        <Popover>
-          <PopoverTrigger render={<Button variant="outline" size="sm" className="gap-2 font-normal" />}>
-            <CalendarIcon className="size-4 text-muted-foreground" aria-hidden />
-            {dateRange?.from
-              ? dateRange.to && dateRange.to.getTime() !== dateRange.from.getTime()
-                ? `${rangeLabelFormatter.format(dateRange.from)} – ${rangeLabelFormatter.format(dateRange.to)}`
-                : rangeLabelFormatter.format(dateRange.from)
-              : 'All dates'}
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-auto p-0">
-            <Calendar
-              mode="range"
-              selected={dateRange}
-              onSelect={setDateRange}
-              defaultMonth={dateRange?.from}
-              disabled={{ after: new Date() }}
-            />
-          </PopoverContent>
-        </Popover>
-        {dateRange?.from && (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Clear date filter"
-            onClick={() => setDateRange(undefined)}
-          >
-            <X className="size-4" />
-          </Button>
-        )}
-      </div>
-
       {hasSends && (
         <section className="mb-4 rounded-lg border border-border p-3">
           <GradePyramid ascents={filteredAscents} />
         </section>
       )}
 
+      {/* Filter section — the controls narrow BOTH the pyramid above and the sessions
+          below (the placement under the graph is layout, not scope). */}
+      <section aria-label="Logbook filters" className="mb-4 space-y-4 rounded-lg border border-border p-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Filter
+          </h2>
+          {(dateRange?.from || gradeRange) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="-my-1 h-7 gap-1 px-2 text-xs text-muted-foreground"
+              onClick={() => {
+                setDateRange(undefined)
+                setGradeRange(null)
+              }}
+            >
+              <X className="size-3.5" />
+              Reset
+            </Button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1">
+          <Popover>
+            <PopoverTrigger render={<Button variant="outline" size="sm" className="gap-2 font-normal" />}>
+              <CalendarIcon className="size-4 text-muted-foreground" aria-hidden />
+              {dateRange?.from
+                ? dateRange.to && dateRange.to.getTime() !== dateRange.from.getTime()
+                  ? `${rangeLabelFormatter.format(dateRange.from)} – ${rangeLabelFormatter.format(dateRange.to)}`
+                  : rangeLabelFormatter.format(dateRange.from)
+                : 'All dates'}
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-auto p-0">
+              <Calendar
+                mode="range"
+                selected={dateRange}
+                onSelect={setDateRange}
+                defaultMonth={dateRange?.from}
+                disabled={{ after: new Date() }}
+              />
+            </PopoverContent>
+          </Popover>
+          {dateRange?.from && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Clear date filter"
+              onClick={() => setDateRange(undefined)}
+            >
+              <X className="size-4" />
+            </Button>
+          )}
+        </div>
+
+        {gradeSpan && gradeSpan[0] < gradeSpan[1] && (
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Grade</span>
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {FONT_GRADES[(gradeRange ?? gradeSpan)[0]]} – {FONT_GRADES[(gradeRange ?? gradeSpan)[1]]}
+              </span>
+            </div>
+            <Slider
+              aria-label="Grade range"
+              min={gradeSpan[0]}
+              max={gradeSpan[1]}
+              step={1}
+              value={[(gradeRange ?? gradeSpan)[0], (gradeRange ?? gradeSpan)[1]]}
+              onValueChange={(value) => {
+                const [lo, hi] = value as number[]
+                setGradeRange(lo === gradeSpan[0] && hi === gradeSpan[1] ? null : [lo, hi])
+              }}
+            />
+          </div>
+        )}
+      </section>
+
       {daySessions.length === 0 && (
         <EmptyState
-          title="No ascents in this date range"
-          body="Adjust or clear the date filter to see more of your history."
+          title="No ascents match your filters"
+          body="Adjust or clear the filters to see more of your history."
         />
       )}
 

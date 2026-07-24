@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { FONT_GRADES } from '../board/grades'
 import type { Ascent } from './ascents'
-import { filterByDayRange, pyramid, sessions } from './sessions'
+import { filterByDayRange, filterByGradeRange, loggedGradeSpan, pyramid, sessions } from './sessions'
 
 function ascent(partial: Partial<Ascent>): Ascent {
   return {
@@ -113,5 +114,29 @@ describe('filterByDayRange', () => {
     // A from late in the day still includes that whole day's earlier ascents.
     const out = filterByDayRange(list, new Date('2026-07-03T23:00:00'), new Date('2026-07-06T00:30:00'))
     expect(out.map((a) => a.id)).toEqual(['jul3', 'jul6'])
+  })
+})
+
+describe('filterByGradeRange / loggedGradeSpan', () => {
+  const list = [
+    ascent({ id: 'easy', problemGrade: '6A' }),
+    ascent({ id: 'mid', problemGrade: '6B+' }),
+    ascent({ id: 'hard', problemGrade: '7A' }),
+    ascent({ id: 'odd', problemGrade: 'V-weird' }),
+  ]
+  const gi = (g: string) => FONT_GRADES.indexOf(g)
+
+  it('spans the logged grades, ignoring off-scale ones', () => {
+    expect(loggedGradeSpan(list)).toEqual([gi('6A'), gi('7A')])
+    expect(loggedGradeSpan([ascent({ problemGrade: 'V-weird' })])).toBeNull()
+  })
+
+  it('keeps only in-range grades but never hides off-scale ones', () => {
+    const out = filterByGradeRange(list, [gi('6B'), gi('7A')])
+    expect(out.map((a) => a.id)).toEqual(['mid', 'hard', 'odd'])
+  })
+
+  it('null range returns the list unchanged', () => {
+    expect(filterByGradeRange(list, null)).toEqual(list)
   })
 })

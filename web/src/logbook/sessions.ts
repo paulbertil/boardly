@@ -2,7 +2,7 @@
 // aggregation. No storage / no React here so it stays unit-testable. Mirrors iOS
 // `LogSession` (Ascent.swift) and `GradePyramidView.Model`.
 
-import { FONT_GRADES } from '../board/grades'
+import { FONT_GRADES, gradeIndex } from '../board/grades'
 import type { Ascent } from './ascents'
 import { TRY_BUCKETS, tryBucket, type TryBucket } from './tryBucket'
 
@@ -67,6 +67,34 @@ export function filterByDayRange(ascents: Ascent[], from?: Date, to?: Date): Asc
     const key = localDayKey(new Date(a.date))
     return key >= fromKey && key <= toKey
   })
+}
+
+/** Ascents whose grade ordinal falls inside [lo, hi] (canonical scale, inclusive).
+ *  Grades off the scale are never hidden (mirrors the catalog filter's AE4 rule).
+ *  Null range → the list unchanged. */
+export function filterByGradeRange(
+  ascents: Ascent[],
+  range: [number, number] | null,
+): Ascent[] {
+  if (!range) return ascents
+  return ascents.filter((a) => {
+    const gi = gradeIndex(a.problemGrade)
+    return gi >= FONT_GRADES.length || (gi >= range[0] && gi <= range[1])
+  })
+}
+
+/** The ordinal [min, max] span of the grades actually logged, or null when none are on
+ *  the canonical scale — the logbook grade slider's domain. */
+export function loggedGradeSpan(ascents: Ascent[]): [number, number] | null {
+  let lo = Infinity
+  let hi = -Infinity
+  for (const a of ascents) {
+    const gi = gradeIndex(a.problemGrade)
+    if (gi >= FONT_GRADES.length) continue
+    if (gi < lo) lo = gi
+    if (gi > hi) hi = gi
+  }
+  return lo === Infinity ? null : [lo, hi]
 }
 
 /** One row of pyramid chart data: a grade plus the per-bucket send counts. Bucket keys

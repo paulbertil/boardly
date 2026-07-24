@@ -460,6 +460,64 @@ describe('LogbookScreen — date-span filter', () => {
     fireEvent.click(screen.getByRole('button', { name: /July 12th/ }))
 
     expect(screen.queryByText('EARLY PROB')).toBeNull()
-    expect(screen.getByText('No ascents in this date range')).toBeInTheDocument()
+    expect(screen.getByText('No ascents match your filters')).toBeInTheDocument()
+  })
+})
+
+describe('LogbookScreen — filter section', () => {
+  const addedBoard = { layoutId: 7, name: 'Mini MoonBoard 2025' }
+  const baseAscent = {
+    id: 'a1',
+    date: '2026-07-01T10:00:00',
+    boardLayoutId: 7,
+    problemName: 'CRIMP CITY',
+    problemGrade: '6A',
+    votedGrade: '6A',
+    tries: 1,
+    stars: 0,
+    comment: '',
+    sent: false,
+    sourceCatalogId: null as string | null,
+    userProblemId: null as string | null,
+  }
+
+  it('shows the grade slider spanning the logged grades', () => {
+    boardState.addedBoards = [addedBoard]
+    ascentsState.ascents = [
+      { ...baseAscent, id: 'g1', problemGrade: '6A' },
+      { ...baseAscent, id: 'g2', problemGrade: '7A', problemName: 'HARD ONE' },
+    ]
+    render(<LogbookScreen />)
+
+    expect(screen.getByRole('region', { name: 'Logbook filters' })).toBeInTheDocument()
+    expect(screen.getByText('Grade')).toBeInTheDocument()
+    expect(screen.getByText('6A – 7A')).toBeInTheDocument()
+  })
+
+  it('hides the grade slider when only one grade is logged', () => {
+    boardState.addedBoards = [addedBoard]
+    ascentsState.ascents = [{ ...baseAscent, id: 'g1', problemGrade: '6A' }]
+    render(<LogbookScreen />)
+
+    expect(screen.queryByText('Grade')).toBeNull()
+  })
+
+  it('Reset appears once a filter is active and clears it', async () => {
+    boardState.addedBoards = [addedBoard]
+    ascentsState.ascents = [
+      { ...baseAscent, id: 'j1', date: '2026-07-01T10:00:00', problemName: 'EARLY PROB' },
+      { ...baseAscent, id: 'j6', date: '2026-07-06T10:00:00', problemName: 'LATE PROB' },
+    ]
+    render(<LogbookScreen />)
+
+    expect(screen.queryByRole('button', { name: /Reset/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /All dates/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /July 1st/ }))
+    fireEvent.click(screen.getByRole('button', { name: /July 3rd/ }))
+    expect(screen.queryByText('LATE PROB')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: /Reset/ }))
+    expect(screen.getByText('LATE PROB')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Reset/ })).toBeNull()
   })
 })
