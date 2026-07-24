@@ -16,7 +16,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { BadgeCheck, CheckCircle2, ChevronLeft, ChevronRight, Heart, Lightbulb, ListPlus, Repeat, Star } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
 import { SignInDialog } from '../auth/SignInDialog'
-import { addAttemptTries } from '../logbook/ascents'
+import { addAttemptTries, useAscents } from '../logbook/ascents'
+import { problemLogContext } from '../logbook/problemHistory'
 import { TryStepper } from '../logbook/TryStepper'
 import { useLightUp } from '../ble/useLightUp'
 import { CatalogBoard } from '../board/CatalogBoard'
@@ -82,6 +83,10 @@ export function ProblemDetail({
     [queueEntries],
   )
   const { toggleFavorite } = useFavorites()
+  // Logged rows for the shown problem feed the log-send sheet's seeding (absorb the
+  // day's attempt row) and its Flash / Session flash label. Loaded by the host screens
+  // (they all call useEnsureAscentsLoaded).
+  const { ascents } = useAscents()
   const { status } = useAuth()
   const signedIn = status !== 'signedOut'
   const [logTarget, setLogTarget] = useState<LogTarget | null>(null)
@@ -233,12 +238,17 @@ export function ProblemDetail({
     })
   }
 
-  // "Log ascent" opens the full sheet as a SEND, pre-seeding tries from the stepper.
+  // "Log ascent" opens the full sheet as a SEND that folds in the day's earlier tries:
+  // the attempt row flushed earlier today (absorbed + soft-deleted on save) plus the
+  // inline stepper, plus 1 for the successful go — the stepper counts failed goes.
+  // The sheet also learns the problem's logged past (Flash vs Session flash).
   function logAscent() {
     if (!signedIn) {
       setSignInOpen(true)
       return
     }
+    const context = problemLogContext(ascents, currentId, new Date())
+    const earlierToday = (context.todayAttempt?.tries ?? 0) + currentTries
     setLogTarget({
       kind: 'create',
       sourceCatalogId: currentId,
@@ -246,7 +256,13 @@ export function ProblemDetail({
       problemGrade: current.grade,
       boardLayoutId: board.layoutId,
       sent: true,
-      tries: Math.max(currentTries, 1),
+      tries: earlierToday + 1,
+      absorb: context.todayAttempt
+        ? { id: context.todayAttempt.id, tries: context.todayAttempt.tries }
+        : undefined,
+      earlierTriesToday: earlierToday,
+      priorDays: context.priorDays,
+      hasPriorHistory: context.hasHistory || currentTries > 0,
     })
     setLogOpen(true)
   }

@@ -24,7 +24,7 @@ const titleFormatter = new Intl.DateTimeFormat(undefined, {
 })
 
 /** Local calendar-day key for a Date (matches iOS `Calendar.current.startOfDay`). */
-function localDayKey(d: Date): string {
+export function localDayKey(d: Date): string {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
