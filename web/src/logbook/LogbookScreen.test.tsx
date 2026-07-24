@@ -86,6 +86,7 @@ vi.mock('@/components/ui/drawer', () => ({
       </div>
     ) : null,
   DrawerContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  DrawerHeader: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   DrawerTitle: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }))
 vi.mock('../catalog/catalogSync', async (importOriginal) => {
@@ -408,7 +409,7 @@ describe('LogbookScreen — row tap-through to problem detail', () => {
   })
 })
 
-describe('LogbookScreen — date-span filter', () => {
+describe('LogbookScreen — filters', () => {
   const addedBoard = { layoutId: 7, name: 'Mini MoonBoard 2025' }
   const baseAscent = {
     id: 'a1',
@@ -425,7 +426,11 @@ describe('LogbookScreen — date-span filter', () => {
     userProblemId: null as string | null,
   }
 
-  it('narrows the session list to the picked span and clears back to all dates', async () => {
+  function openFilterSheet() {
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }))
+  }
+
+  it('narrows the sessions to a picked date span and removes it via the chip', async () => {
     boardState.addedBoards = [addedBoard]
     ascentsState.ascents = [
       { ...baseAscent, id: 'j1', date: '2026-07-01T10:00:00', problemName: 'EARLY PROB' },
@@ -433,53 +438,34 @@ describe('LogbookScreen — date-span filter', () => {
     ]
     render(<LogbookScreen />)
 
-    // Unfiltered: both sessions visible.
     expect(screen.getByText('EARLY PROB')).toBeInTheDocument()
     expect(screen.getByText('LATE PROB')).toBeInTheDocument()
 
-    // Open the picker and select Jul 1 → Jul 3 (today is 2026-07-24, so July is shown).
-    fireEvent.click(screen.getByRole('button', { name: /All dates/ }))
+    // Pick Jul 1 → Jul 3 in the sheet's inline calendar (today is 2026-07-24).
+    openFilterSheet()
     fireEvent.click(await screen.findByRole('button', { name: /July 1st/ }))
     fireEvent.click(screen.getByRole('button', { name: /July 3rd/ }))
 
     expect(screen.getByText('EARLY PROB')).toBeInTheDocument()
     expect(screen.queryByText('LATE PROB')).toBeNull()
 
-    // Clear → everything back.
-    fireEvent.click(screen.getByRole('button', { name: 'Clear date filter' }))
+    // The active filter surfaces as a removable chip; tapping it clears the span.
+    fireEvent.click(screen.getByRole('button', { name: /Remove .* filter/ }))
     expect(screen.getByText('LATE PROB')).toBeInTheDocument()
   })
 
-  it('shows an in-range empty state when the span has no ascents', async () => {
+  it('shows an empty state when the picked span has no ascents', async () => {
     boardState.addedBoards = [addedBoard]
     ascentsState.ascents = [{ ...baseAscent, id: 'j1', problemName: 'EARLY PROB' }]
     render(<LogbookScreen />)
 
-    fireEvent.click(screen.getByRole('button', { name: /All dates/ }))
+    openFilterSheet()
     fireEvent.click(await screen.findByRole('button', { name: /July 10th/ }))
     fireEvent.click(screen.getByRole('button', { name: /July 12th/ }))
 
     expect(screen.queryByText('EARLY PROB')).toBeNull()
     expect(screen.getByText('No ascents match your filters')).toBeInTheDocument()
   })
-})
-
-describe('LogbookScreen — filter section', () => {
-  const addedBoard = { layoutId: 7, name: 'Mini MoonBoard 2025' }
-  const baseAscent = {
-    id: 'a1',
-    date: '2026-07-01T10:00:00',
-    boardLayoutId: 7,
-    problemName: 'CRIMP CITY',
-    problemGrade: '6A',
-    votedGrade: '6A',
-    tries: 1,
-    stars: 0,
-    comment: '',
-    sent: false,
-    sourceCatalogId: null as string | null,
-    userProblemId: null as string | null,
-  }
 
   it('shows the grade slider spanning the logged grades', () => {
     boardState.addedBoards = [addedBoard]
@@ -489,9 +475,9 @@ describe('LogbookScreen — filter section', () => {
     ]
     render(<LogbookScreen />)
 
-    expect(screen.getByRole('region', { name: 'Logbook filters' })).toBeInTheDocument()
-    expect(screen.getByText('Grade')).toBeInTheDocument()
-    expect(screen.getByText('6A – 7A')).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Logbook filters' })).toBeInTheDocument()
+    openFilterSheet()
+    expect(screen.getByText('Grade · 6A – 7A')).toBeInTheDocument()
   })
 
   it('hides the grade slider when only one grade is logged', () => {
@@ -499,10 +485,11 @@ describe('LogbookScreen — filter section', () => {
     ascentsState.ascents = [{ ...baseAscent, id: 'g1', problemGrade: '6A' }]
     render(<LogbookScreen />)
 
-    expect(screen.queryByText('Grade')).toBeNull()
+    openFilterSheet()
+    expect(screen.queryByText(/Grade ·/)).toBeNull()
   })
 
-  it('Reset appears once a filter is active and clears it', async () => {
+  it('Clear filters in the sheet resets everything', async () => {
     boardState.addedBoards = [addedBoard]
     ascentsState.ascents = [
       { ...baseAscent, id: 'j1', date: '2026-07-01T10:00:00', problemName: 'EARLY PROB' },
@@ -510,14 +497,14 @@ describe('LogbookScreen — filter section', () => {
     ]
     render(<LogbookScreen />)
 
-    expect(screen.queryByRole('button', { name: /Reset/ })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: /All dates/ }))
+    openFilterSheet()
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).toBeNull()
     fireEvent.click(await screen.findByRole('button', { name: /July 1st/ }))
     fireEvent.click(screen.getByRole('button', { name: /July 3rd/ }))
     expect(screen.queryByText('LATE PROB')).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: /Reset/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
     expect(screen.getByText('LATE PROB')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Reset/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).toBeNull()
   })
 })

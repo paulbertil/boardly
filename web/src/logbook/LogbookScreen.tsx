@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { getRouteApi } from '@tanstack/react-router'
-import { CalendarIcon, X } from 'lucide-react'
+import { SlidersHorizontal, X } from 'lucide-react'
 import type { DateRange } from 'react-day-picker'
 import { useAuth } from '../auth/AuthProvider'
 import { SignInPanel } from '../auth/SignInPanel'
@@ -17,10 +17,9 @@ import { useProblemDrawer } from '../catalog/useProblemDrawer'
 import { useShowPreviews } from '../catalog/previewsStore'
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Slider } from '@/components/ui/slider'
-import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer'
 import { useEnsureAscentsLoaded, type Ascent } from './ascents'
 import { AscentRow } from './AscentRow'
 import { GradePyramid } from './GradePyramid'
@@ -57,6 +56,7 @@ export function LogbookScreen() {
   // and a grade-ordinal range (null = full span, mirroring the catalog filter).
   const [dateRange, setDateRange] = useState<DateRange | undefined>()
   const [gradeRange, setGradeRange] = useState<[number, number] | null>(null)
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false)
 
   // Board-scoped view, mirroring iOS (the pyramid + list follow the active board).
   const boardAscents = useMemo(
@@ -143,6 +143,17 @@ export function LogbookScreen() {
       ),
     [boardAscents],
   )
+
+  // Chip labels for the active filters (null = filter off).
+  const dateLabel = dateRange?.from
+    ? dateRange.to && dateRange.to.getTime() !== dateRange.from.getTime()
+      ? `${rangeLabelFormatter.format(dateRange.from)} – ${rangeLabelFormatter.format(dateRange.to)}`
+      : rangeLabelFormatter.format(dateRange.from)
+    : null
+  const gradeLabel = gradeRange
+    ? `${FONT_GRADES[gradeRange[0]]} – ${FONT_GRADES[gradeRange[1]]}`
+    : null
+  const filtersActive = dateLabel !== null || gradeLabel !== null
 
   // The board name only belongs here once the active board is one the user added —
   // otherwise the store's default board would leak a name for a board they never chose.
@@ -250,83 +261,102 @@ export function LogbookScreen() {
         </section>
       )}
 
-      {/* Filter section — the controls narrow BOTH the pyramid above and the sessions
-          below (the placement under the graph is layout, not scope). */}
-      <section aria-label="Logbook filters" className="mb-4 space-y-4 rounded-lg border border-border p-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Filter
-          </h2>
-          {(dateRange?.from || gradeRange) && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="-my-1 h-7 gap-1 px-2 text-xs text-muted-foreground"
-              onClick={() => {
-                setDateRange(undefined)
-                setGradeRange(null)
-              }}
-            >
-              <X className="size-3.5" />
-              Reset
-            </Button>
-          )}
-        </div>
+      {/* Compact filter row, mirroring the catalog's pill bar: a small "Filters" opener
+          plus one removable tag per active filter. The controls live in a bottom sheet
+          and narrow BOTH the pyramid above and the sessions below. */}
+      <div
+        role="group"
+        aria-label="Logbook filters"
+        className="mb-3 flex flex-nowrap items-center gap-1.5 overflow-x-auto py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setFilterSheetOpen(true)}
+          className="h-6 shrink-0 gap-1 rounded-[min(var(--radius-md),12px)] px-2 text-xs font-medium"
+        >
+          <SlidersHorizontal aria-hidden className="size-3.5" />
+          Filters
+        </Button>
 
-        <div className="flex items-center gap-1">
-          <Popover>
-            <PopoverTrigger render={<Button variant="outline" size="sm" className="gap-2 font-normal" />}>
-              <CalendarIcon className="size-4 text-muted-foreground" aria-hidden />
-              {dateRange?.from
-                ? dateRange.to && dateRange.to.getTime() !== dateRange.from.getTime()
-                  ? `${rangeLabelFormatter.format(dateRange.from)} – ${rangeLabelFormatter.format(dateRange.to)}`
-                  : rangeLabelFormatter.format(dateRange.from)
-                : 'All dates'}
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-auto p-0">
+        {filtersActive && <div aria-hidden className="h-4 w-px shrink-0 bg-border" />}
+
+        {dateLabel && (
+          <button
+            type="button"
+            onClick={() => setDateRange(undefined)}
+            aria-label={`Remove ${dateLabel} filter`}
+            className="inline-flex h-6 shrink-0 items-center gap-1 rounded-[min(var(--radius-md),12px)] border border-border bg-transparent px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <span>{dateLabel}</span>
+            <X aria-hidden className="size-3 text-muted-foreground" />
+          </button>
+        )}
+        {gradeLabel && (
+          <button
+            type="button"
+            onClick={() => setGradeRange(null)}
+            aria-label={`Remove ${gradeLabel} filter`}
+            className="inline-flex h-6 shrink-0 items-center gap-1 rounded-[min(var(--radius-md),12px)] border border-border bg-transparent px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <span>{gradeLabel}</span>
+            <X aria-hidden className="size-3 text-muted-foreground" />
+          </button>
+        )}
+      </div>
+
+      <Drawer open={filterSheetOpen} onOpenChange={setFilterSheetOpen} showSwipeHandle>
+        <DrawerContent>
+          <DrawerHeader className="flex flex-row items-center justify-between gap-2">
+            <DrawerTitle>Filters</DrawerTitle>
+            {filtersActive && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setDateRange(undefined)
+                  setGradeRange(null)
+                }}
+              >
+                Clear filters
+              </Button>
+            )}
+          </DrawerHeader>
+          <div className="max-h-[70vh] space-y-5 overflow-y-auto px-4 pb-[calc(2rem+env(safe-area-inset-bottom))]">
+            <div className="space-y-1.5">
+              <div className="text-xs font-medium text-muted-foreground">
+                {`Dates · ${dateLabel ?? 'All'}`}
+              </div>
               <Calendar
                 mode="range"
                 selected={dateRange}
                 onSelect={setDateRange}
                 defaultMonth={dateRange?.from}
                 disabled={{ after: new Date() }}
+                className="mx-auto"
               />
-            </PopoverContent>
-          </Popover>
-          {dateRange?.from && (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Clear date filter"
-              onClick={() => setDateRange(undefined)}
-            >
-              <X className="size-4" />
-            </Button>
-          )}
-        </div>
-
-        {gradeSpan && gradeSpan[0] < gradeSpan[1] && (
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Grade</span>
-              <span className="text-xs tabular-nums text-muted-foreground">
-                {FONT_GRADES[(gradeRange ?? gradeSpan)[0]]} – {FONT_GRADES[(gradeRange ?? gradeSpan)[1]]}
-              </span>
             </div>
-            <Slider
-              aria-label="Grade range"
-              min={gradeSpan[0]}
-              max={gradeSpan[1]}
-              step={1}
-              value={[(gradeRange ?? gradeSpan)[0], (gradeRange ?? gradeSpan)[1]]}
-              onValueChange={(value) => {
-                const [lo, hi] = value as number[]
-                setGradeRange(lo === gradeSpan[0] && hi === gradeSpan[1] ? null : [lo, hi])
-              }}
-            />
+            {gradeSpan && gradeSpan[0] < gradeSpan[1] && (
+              <div className="space-y-1.5">
+                <div className="text-xs font-medium text-muted-foreground">
+                  {`Grade · ${FONT_GRADES[(gradeRange ?? gradeSpan)[0]]} – ${FONT_GRADES[(gradeRange ?? gradeSpan)[1]]}`}
+                </div>
+                <Slider
+                  aria-label="Grade range"
+                  min={gradeSpan[0]}
+                  max={gradeSpan[1]}
+                  step={1}
+                  value={[(gradeRange ?? gradeSpan)[0], (gradeRange ?? gradeSpan)[1]]}
+                  onValueChange={(value) => {
+                    const [lo, hi] = value as number[]
+                    setGradeRange(lo === gradeSpan[0] && hi === gradeSpan[1] ? null : [lo, hi])
+                  }}
+                />
+              </div>
+            )}
           </div>
-        )}
-      </section>
+        </DrawerContent>
+      </Drawer>
 
       {daySessions.length === 0 && (
         <EmptyState
