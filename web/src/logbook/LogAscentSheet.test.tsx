@@ -10,12 +10,14 @@ const ascentsMock = vi.hoisted(() => ({
   createAscent: vi.fn(async () => {}),
   deleteAscent: vi.fn(async () => {}),
   updateAscent: vi.fn(async () => {}),
+  absorbAttemptRow: vi.fn(async () => {}),
 }))
 vi.mock('./ascents', () => ({
   useAscents: () => ({ status: 'loaded', ascents: ascentsMock.rows, error: null }),
   createAscent: ascentsMock.createAscent,
   deleteAscent: ascentsMock.deleteAscent,
   updateAscent: ascentsMock.updateAscent,
+  absorbAttemptRow: ascentsMock.absorbAttemptRow,
 }))
 
 function ascent(over: Partial<Ascent> = {}): Ascent {
@@ -73,7 +75,7 @@ describe('LogAscentSheet — absorb on save', () => {
     expect(ascentsMock.createAscent).toHaveBeenCalledWith(
       expect.objectContaining({ tries: 4, sent: true, sourceCatalogId: 'cat-1' }),
     )
-    await waitFor(() => expect(ascentsMock.deleteAscent).toHaveBeenCalledWith('att-1'))
+    await waitFor(() => expect(ascentsMock.absorbAttemptRow).toHaveBeenCalledWith('att-1', 3))
   })
 
   it('never deletes when there is no absorb target', async () => {
@@ -82,7 +84,7 @@ describe('LogAscentSheet — absorb on save', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(ascentsMock.createAscent).toHaveBeenCalledTimes(1))
-    expect(ascentsMock.deleteAscent).not.toHaveBeenCalled()
+    expect(ascentsMock.absorbAttemptRow).not.toHaveBeenCalled()
   })
 
   it('skips the absorb delete when the send is re-dated off today', async () => {
@@ -96,7 +98,7 @@ describe('LogAscentSheet — absorb on save', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(ascentsMock.createAscent).toHaveBeenCalledTimes(1))
-    expect(ascentsMock.deleteAscent).not.toHaveBeenCalled()
+    expect(ascentsMock.absorbAttemptRow).not.toHaveBeenCalled()
   })
 })
 

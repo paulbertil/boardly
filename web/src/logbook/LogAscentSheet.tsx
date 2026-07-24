@@ -27,7 +27,14 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { attemptId } from './attemptId'
-import { createAscent, deleteAscent, updateAscent, useAscents, type Ascent } from './ascents'
+import {
+  absorbAttemptRow,
+  createAscent,
+  deleteAscent,
+  updateAscent,
+  useAscents,
+  type Ascent,
+} from './ascents'
 import { ascentIdentity } from './problemHistory'
 import { localDayKey } from './sessions'
 
@@ -174,10 +181,11 @@ export function LogAscentSheet({ open, onOpenChange, target, onSaved }: LogAscen
           // The absorbed tries now live on the send row — drop today's attempt row so
           // the day shows ONE logbook entry. Only when the send still lands on TODAY:
           // the absorb target was captured for today's local day at sheet-open, so a
-          // send the user re-dated to another day must not erase today's tries.
-          // Best-effort: the send is already saved, and surfacing a cleanup failure
-          // would invite a retry that duplicates it.
-          await deleteAscent(target.absorb.id).catch(() => {})
+          // send the user re-dated to another day must not erase today's tries. The
+          // delete is guarded (row must still hold the folded tries) and best-effort:
+          // the send is already saved, and surfacing a cleanup failure would invite a
+          // retry that duplicates it.
+          await absorbAttemptRow(target.absorb.id, target.absorb.tries).catch(() => {})
         }
       }
       onSaved?.()

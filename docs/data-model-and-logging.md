@@ -109,7 +109,11 @@ day's tries into an explicit send instead of leaving two rows for the day:
   sent today …"), so a duplicate same-day send or a post-send attempt row is always
   deliberate, never a mis-tap. Once confirmed, further stepper taps flow freely.
 
-iOS does not absorb yet — it still writes the send alongside the day's attempt row.
+iOS does not absorb yet — it still writes the send alongside the day's attempt row, and
+its accumulate-flush trusts its local row copy. The web side guards its half (the flush
+reads the server row's `tries`/`deleted` before accumulating — `addAttemptTries`; the
+absorb delete only fires while the row still holds the folded tries — `absorbAttemptRow`),
+but the cross-device one-entry invariant needs iOS to mirror those guards.
 
 ### Flash vs Session flash (web)
 

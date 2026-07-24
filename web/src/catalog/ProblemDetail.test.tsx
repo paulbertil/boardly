@@ -25,10 +25,13 @@ vi.mock('../auth/AuthProvider', async (importOriginal) => {
 const ascentsMock = vi.hoisted(() => ({ rows: [] as unknown[] }))
 vi.mock('../logbook/ascents', () => ({
   useAscents: () => ({ status: 'loaded', ascents: ascentsMock.rows, error: null }),
+  getAscentsSnapshot: () => ascentsMock.rows,
+  settleAscents: vi.fn(async () => {}),
   addAttemptTries: vi.fn(async () => {}),
   createAscent: vi.fn(async () => {}),
   deleteAscent: vi.fn(async () => {}),
   updateAscent: vi.fn(async () => {}),
+  absorbAttemptRow: vi.fn(async () => {}),
 }))
 
 vi.mock('../ble/useBle', () => ({
@@ -274,54 +277,55 @@ describe('ProblemDetail', () => {
       boardLayoutId: 7,
     })
 
-    it('opens the log sheet directly when there is no send today', () => {
+    it('opens the log sheet directly when there is no send today', async () => {
       renderDetail('b')
       fireEvent.click(screen.getByRole('button', { name: 'Log ascent' }))
+      expect(await screen.findByText('Log send')).toBeInTheDocument()
       expect(screen.queryByText('Already sent today')).not.toBeInTheDocument()
-      expect(screen.getByText('Log send')).toBeInTheDocument()
     })
 
-    it('asks before a second send today, and proceeds only on confirm', () => {
+    it('asks before a second send today, and proceeds only on confirm', async () => {
       ascentsMock.rows = [sentToday('b')]
       renderDetail('b')
       fireEvent.click(screen.getByRole('button', { name: 'Log ascent' }))
-      expect(screen.getByText('Already sent today')).toBeInTheDocument()
+      expect(await screen.findByText('Already sent today')).toBeInTheDocument()
       expect(screen.queryByText('Log send')).not.toBeInTheDocument()
       fireEvent.click(screen.getByRole('button', { name: 'Log again' }))
-      expect(screen.getByText('Log send')).toBeInTheDocument()
+      expect(await screen.findByText('Log send')).toBeInTheDocument()
     })
 
-    it('cancel keeps both the sheet and the dialog closed', () => {
+    it('cancel keeps both the sheet and the dialog closed', async () => {
       ascentsMock.rows = [sentToday('b')]
       renderDetail('b')
       fireEvent.click(screen.getByRole('button', { name: 'Log ascent' }))
+      await screen.findByText('Already sent today')
       fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
       expect(screen.queryByText('Already sent today')).not.toBeInTheDocument()
       expect(screen.queryByText('Log send')).not.toBeInTheDocument()
     })
 
-    it('gates only the FIRST extra try on a problem sent today, then counts freely', () => {
+    it('gates only the FIRST extra try on a problem sent today, then counts freely', async () => {
       ascentsMock.rows = [sentToday('b')]
       renderDetail('b')
       fireEvent.click(screen.getByRole('button', { name: 'Log a try' }))
       // Gated: nothing counted yet.
-      expect(screen.getByText('Already sent today')).toBeInTheDocument()
+      expect(await screen.findByText('Already sent today')).toBeInTheDocument()
       fireEvent.click(screen.getByRole('button', { name: 'Log try anyway' }))
-      expect(screen.getByText('1 try')).toBeInTheDocument()
+      expect(await screen.findByText('1 try')).toBeInTheDocument()
       // Subsequent taps flow without the dialog.
       fireEvent.click(screen.getByRole('button', { name: 'Log a try' }))
+      expect(await screen.findByText('2 tries')).toBeInTheDocument()
       expect(screen.queryByText('Already sent today')).not.toBeInTheDocument()
-      expect(screen.getByText('2 tries')).toBeInTheDocument()
     })
 
-    it('does not gate the try stepper on a problem not sent today', () => {
+    it('does not gate the try stepper on a problem not sent today', async () => {
       renderDetail('b')
       fireEvent.click(screen.getByRole('button', { name: 'Log a try' }))
+      expect(await screen.findByText('1 try')).toBeInTheDocument()
       expect(screen.queryByText('Already sent today')).not.toBeInTheDocument()
-      expect(screen.getByText('1 try')).toBeInTheDocument()
     })
 
-    it('seeds the log sheet with folded tries and the breakdown when an attempt row exists today', () => {
+    it('seeds the log sheet with folded tries and the breakdown when an attempt row exists today', async () => {
       // 3 tries flushed earlier today (unsent attempt row) + the successful go = 4.
       ascentsMock.rows = [
         { ...sentToday('b'), id: 'att-1', sent: false, tries: 3, date: new Date().toISOString() },
@@ -329,9 +333,9 @@ describe('ProblemDetail', () => {
       renderDetail('b')
       fireEvent.click(screen.getByRole('button', { name: 'Log ascent' }))
 
-      // No send today → no confirm; the sheet opens directly with the folded seed.
+      // No send today -> no confirm; the sheet opens directly with the folded seed.
+      expect(await screen.findByText('Log send')).toBeInTheDocument()
       expect(screen.queryByText('Already sent today')).not.toBeInTheDocument()
-      expect(screen.getByText('Log send')).toBeInTheDocument()
       expect(screen.getByText(/Includes 3 tries from earlier today/)).toBeInTheDocument()
       expect(screen.getByText('4')).toBeInTheDocument()
     })

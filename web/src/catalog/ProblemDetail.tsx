@@ -16,8 +16,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { BadgeCheck, CheckCircle2, ChevronLeft, ChevronRight, Heart, Lightbulb, ListPlus, Repeat, Star } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
 import { SignInDialog } from '../auth/SignInDialog'
-import { addAttemptTries, useAscents } from '../logbook/ascents'
-import { problemLogContext } from '../logbook/problemHistory'
+import { addAttemptTries, getAscentsSnapshot, settleAscents } from '../logbook/ascents'
+import { problemLogContext, type ProblemLogContext } from '../logbook/problemHistory'
 import { TryStepper } from '../logbook/TryStepper'
 import { useLightUp } from '../ble/useLightUp'
 import { CatalogBoard } from '../board/CatalogBoard'
@@ -91,10 +91,6 @@ export function ProblemDetail({
     [queueEntries],
   )
   const { toggleFavorite } = useFavorites()
-  // Logged rows for the shown problem feed the log-send sheet's seeding (absorb the
-  // day's attempt row) and its Flash / Session flash label. Loaded by the host screens
-  // (they all call useEnsureAscentsLoaded).
-  const { ascents } = useAscents()
   const { status } = useAuth()
   const signedIn = status !== 'signedOut'
   const [logTarget, setLogTarget] = useState<LogTarget | null>(null)
@@ -103,6 +99,9 @@ export function ProblemDetail({
   // Logging on a problem already sent today — confirm before a duplicate send ('send')
   // or before starting to count more tries ('tries'); null = no dialog.
   const [sentTodayConfirm, setSentTodayConfirm] = useState<'send' | 'tries' | null>(null)
+  // A history read (settle + flush drain) is in flight — re-entrancy guard for the
+  // gate taps and the Log ascent button's disabled state.
+  const [logBusy, setLogBusy] = useState(false)
   // Inline "Log try" stepper state: session-local pending tries for the shown problem,
   // written (merged) to the unsent-attempt row only when leaving the problem (iOS parity).
   // The pending problem is held as the object so a leave-flush needs no list lookup.
@@ -143,15 +142,30 @@ export function ProblemDetail({
   // ── Deferred flush of the inline "Log try" stepper (iOS parity) ──────────────
   // Write/merge the unsent-attempt row only when the user leaves the problem: paging
   // to another problem, or closing the pager (unmount). Same-day tries accumulate.
+  // Flushes are tracked per problem identity (and chained, keeping their
+  // read-modify-write order) so the log-send gate can drain a pending flush before
+  // deciding what to absorb — otherwise a quick page-away-and-back could log a send
+  // that misses the just-flushed tries and leaves two rows for the day.
+  const flushInFlight = useRef<Map<string, Promise<void>>>(new Map())
   const flush = useCallback((p: CatalogProblem | null, tries: number) => {
     if (!p || tries <= 0) return
-    void addAttemptTries({
-      sourceCatalogId: p.source_catalog_id,
-      problemName: p.name,
-      problemGrade: p.grade,
-      boardLayoutId: board.layoutId,
-      date: new Date().toISOString(),
-      addTries: tries,
+    const identity = p.source_catalog_id
+    const prev = flushInFlight.current.get(identity) ?? Promise.resolve()
+    const next = prev
+      .then(() =>
+        addAttemptTries({
+          sourceCatalogId: p.source_catalog_id,
+          problemName: p.name,
+          problemGrade: p.grade,
+          boardLayoutId: board.layoutId,
+          date: new Date().toISOString(),
+          addTries: tries,
+        }),
+      )
+      .catch(() => {})
+    flushInFlight.current.set(identity, next)
+    void next.finally(() => {
+      if (flushInFlight.current.get(identity) === next) flushInFlight.current.delete(identity)
     })
   }, [board.layoutId])
 
@@ -236,16 +250,24 @@ export function ProblemDetail({
     }
   }
 
-  function addTry() {
+  async function addTry() {
     if (!signedIn) {
       setSignInOpen(true)
       return
     }
     // Starting to count tries on a problem already sent today asks first (working it
     // more vs a mis-tap). Only the FIRST tap gates — once counting, +/- flow freely.
-    if (currentTries === 0 && problemLogContext(ascents, currentId, new Date()).todaySend) {
-      setSentTodayConfirm('tries')
-      return
+    if (currentTries === 0) {
+      if (logBusy) return
+      setLogBusy(true)
+      try {
+        if ((await resolveLogContext()).todaySend) {
+          setSentTodayConfirm('tries')
+          return
+        }
+      } finally {
+        setLogBusy(false)
+      }
     }
     commitAddTry()
   }
@@ -259,12 +281,23 @@ export function ProblemDetail({
     })
   }
 
+  // The logged-history context behind the sent-today gate and the absorb seed. The
+  // render-closure `ascents` array can lag reality two ways in the moment that
+  // matters, so this settles the store (kicking a retry when idle/errored — the
+  // cold-start / gym-wifi case that would otherwise silently disable the gate and
+  // the absorb), drains any in-flight flush for this problem, and reads a FRESH
+  // store snapshot.
+  async function resolveLogContext(): Promise<ProblemLogContext> {
+    await settleAscents()
+    await (flushInFlight.current.get(currentId) ?? Promise.resolve())
+    return problemLogContext(getAscentsSnapshot(), currentId, new Date())
+  }
+
   // Open the full sheet as a SEND that folds in the day's earlier tries: the attempt
   // row flushed earlier today (absorbed + soft-deleted on save) plus the inline
   // stepper, plus 1 for the successful go — the stepper counts failed goes.
   // The sheet also learns the problem's logged past (Flash vs Session flash).
-  function openLogSheet() {
-    const context = problemLogContext(ascents, currentId, new Date())
+  function openLogSheet(context: ProblemLogContext) {
     const earlierToday = (context.todayAttempt?.tries ?? 0) + currentTries
     setLogTarget({
       kind: 'create',
@@ -286,16 +319,23 @@ export function ProblemDetail({
 
   // "Log ascent" — but a send already logged today asks first (a second same-day send
   // is a deliberate duplicate, usually a mis-tap), then proceeds via openLogSheet.
-  function logAscent() {
+  async function logAscent() {
     if (!signedIn) {
       setSignInOpen(true)
       return
     }
-    if (problemLogContext(ascents, currentId, new Date()).todaySend) {
-      setSentTodayConfirm('send')
-      return
+    if (logBusy) return
+    setLogBusy(true)
+    try {
+      const context = await resolveLogContext()
+      if (context.todaySend) {
+        setSentTodayConfirm('send')
+        return
+      }
+      openLogSheet(context)
+    } finally {
+      setLogBusy(false)
     }
-    openLogSheet()
   }
 
   // Side-swipe the board to page prev/next (vertical drags fall through to the
@@ -426,8 +466,8 @@ export function ProblemDetail({
       </div>
 
       <div className="flex items-center gap-3">
-        <TryStepper count={currentTries} onRemove={removeTry} onAdd={addTry} />
-        <Button size="lg" className="flex-1" onClick={logAscent}>
+        <TryStepper count={currentTries} onRemove={removeTry} onAdd={() => void addTry()} />
+        <Button size="lg" className="flex-1" onClick={() => void logAscent()} disabled={logBusy}>
           <CheckCircle2 className="size-5" />
           Log ascent
         </Button>
@@ -485,7 +525,9 @@ export function ProblemDetail({
                 const action = sentTodayConfirm
                 setSentTodayConfirm(null)
                 if (action === 'tries') commitAddTry()
-                else openLogSheet()
+                // Store already settled by the gate that opened this dialog — the
+                // re-resolve is a fast fresh-snapshot read.
+                else void resolveLogContext().then(openLogSheet)
               }}
             >
               {sentTodayConfirm === 'tries' ? 'Log try anyway' : 'Log again'}
