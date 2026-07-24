@@ -57,6 +57,18 @@ export function sessions(ascents: Ascent[]): DaySession[] {
     .sort((a, b) => b.dayKey.localeCompare(a.dayKey))
 }
 
+/** Ascents whose LOCAL calendar day falls inside [from, to], inclusive. An open `to`
+ *  narrows to the single `from` day; no `from` returns the list unchanged. */
+export function filterByDayRange(ascents: Ascent[], from?: Date, to?: Date): Ascent[] {
+  if (!from) return ascents
+  const fromKey = localDayKey(from)
+  const toKey = localDayKey(to ?? from)
+  return ascents.filter((a) => {
+    const key = localDayKey(new Date(a.date))
+    return key >= fromKey && key <= toKey
+  })
+}
+
 /** One row of pyramid chart data: a grade plus the per-bucket send counts. Bucket keys
  *  match `TRY_BUCKETS` so `<Bar dataKey="Flash" …>` etc. read straight off it. */
 export type PyramidRow = { grade: string; total: number } & Record<TryBucket, number>

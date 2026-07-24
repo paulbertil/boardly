@@ -407,3 +407,59 @@ describe('LogbookScreen — row tap-through to problem detail', () => {
     expect((await screen.findByTestId('detail')).getAttribute('data-ids')).toBe('p-1,p-2')
   })
 })
+
+describe('LogbookScreen — date-span filter', () => {
+  const addedBoard = { layoutId: 7, name: 'Mini MoonBoard 2025' }
+  const baseAscent = {
+    id: 'a1',
+    date: '2026-07-01T10:00:00',
+    boardLayoutId: 7,
+    problemName: 'CRIMP CITY',
+    problemGrade: '6A',
+    votedGrade: '6A',
+    tries: 1,
+    stars: 0,
+    comment: '',
+    sent: false,
+    sourceCatalogId: null as string | null,
+    userProblemId: null as string | null,
+  }
+
+  it('narrows the session list to the picked span and clears back to all dates', async () => {
+    boardState.addedBoards = [addedBoard]
+    ascentsState.ascents = [
+      { ...baseAscent, id: 'j1', date: '2026-07-01T10:00:00', problemName: 'EARLY PROB' },
+      { ...baseAscent, id: 'j6', date: '2026-07-06T10:00:00', problemName: 'LATE PROB' },
+    ]
+    render(<LogbookScreen />)
+
+    // Unfiltered: both sessions visible.
+    expect(screen.getByText('EARLY PROB')).toBeInTheDocument()
+    expect(screen.getByText('LATE PROB')).toBeInTheDocument()
+
+    // Open the picker and select Jul 1 → Jul 3 (today is 2026-07-24, so July is shown).
+    fireEvent.click(screen.getByRole('button', { name: /All dates/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /July 1st/ }))
+    fireEvent.click(screen.getByRole('button', { name: /July 3rd/ }))
+
+    expect(screen.getByText('EARLY PROB')).toBeInTheDocument()
+    expect(screen.queryByText('LATE PROB')).toBeNull()
+
+    // Clear → everything back.
+    fireEvent.click(screen.getByRole('button', { name: 'Clear date filter' }))
+    expect(screen.getByText('LATE PROB')).toBeInTheDocument()
+  })
+
+  it('shows an in-range empty state when the span has no ascents', async () => {
+    boardState.addedBoards = [addedBoard]
+    ascentsState.ascents = [{ ...baseAscent, id: 'j1', problemName: 'EARLY PROB' }]
+    render(<LogbookScreen />)
+
+    fireEvent.click(screen.getByRole('button', { name: /All dates/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /July 10th/ }))
+    fireEvent.click(screen.getByRole('button', { name: /July 12th/ }))
+
+    expect(screen.queryByText('EARLY PROB')).toBeNull()
+    expect(screen.getByText('No ascents in this date range')).toBeInTheDocument()
+  })
+})

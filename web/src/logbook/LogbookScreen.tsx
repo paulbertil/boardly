@@ -5,6 +5,8 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { getRouteApi } from '@tanstack/react-router'
+import { CalendarIcon, X } from 'lucide-react'
+import type { DateRange } from 'react-day-picker'
 import { useAuth } from '../auth/AuthProvider'
 import { SignInPanel } from '../auth/SignInPanel'
 import { useBoardStore } from '../board/boardStore'
@@ -14,6 +16,8 @@ import { ProblemDetail } from '../catalog/ProblemDetail'
 import { useProblemDrawer } from '../catalog/useProblemDrawer'
 import { useShowPreviews } from '../catalog/previewsStore'
 import { Button } from '@/components/ui/button'
+import { Calendar } from '@/components/ui/calendar'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
 import { useEnsureAscentsLoaded, type Ascent } from './ascents'
@@ -22,9 +26,14 @@ import { GradePyramid } from './GradePyramid'
 import { LogAscentSheet, type LogTarget } from './LogAscentSheet'
 import { MoonBoardImportBanner } from './MoonBoardImportBanner'
 import { priorHistoryIds } from './problemHistory'
-import { sessions } from './sessions'
+import { filterByDayRange, sessions } from './sessions'
 
 const routeApi = getRouteApi('/logbook')
+
+const rangeLabelFormatter = new Intl.DateTimeFormat(undefined, {
+  day: 'numeric',
+  month: 'short',
+})
 
 export function LogbookScreen() {
   const { status, isRestoring } = useAuth()
@@ -42,11 +51,17 @@ export function LogbookScreen() {
   const [target, setTarget] = useState<LogTarget | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [catalogById, setCatalogById] = useState<Map<string, CatalogProblem>>(new Map())
+  // Date-span filter (local days, inclusive) narrowing the pyramid + session list.
+  const [dateRange, setDateRange] = useState<DateRange | undefined>()
 
   // Board-scoped view, mirroring iOS (the pyramid + list follow the active board).
   const boardAscents = useMemo(
     () => ascents.filter((a) => a.boardLayoutId === activeBoard.layoutId),
     [ascents, activeBoard.layoutId],
+  )
+  const filteredAscents = useMemo(
+    () => filterByDayRange(boardAscents, dateRange?.from, dateRange?.to),
+    [boardAscents, dateRange],
   )
 
   // Enrich rows with cached catalog entries (setter / benchmark / thumbnail). Scoped to
@@ -71,11 +86,12 @@ export function LogbookScreen() {
       cancelled = true
     }
   }, [boardAscents])
-  const daySessions = useMemo(() => sessions(boardAscents), [boardAscents])
+  const daySessions = useMemo(() => sessions(filteredAscents), [filteredAscents])
   // Rows whose problem has earlier logged history — their one-try sends read
-  // "Session flash" (flash stays reserved for never-tried problems).
+  // "Session flash" (flash stays reserved for never-tried problems). Computed over ALL
+  // board ascents, not the filtered view: a row's history doesn't change with the filter.
   const historyIds = useMemo(() => priorHistoryIds(boardAscents), [boardAscents])
-  const hasSends = boardAscents.some((a) => a.sent)
+  const hasSends = filteredAscents.some((a) => a.sent)
 
   function openEdit(ascent: Ascent) {
     setTarget({ kind: 'edit', ascent })
@@ -218,10 +234,50 @@ export function LogbookScreen() {
 
       <MoonBoardImportBanner />
 
+      {/* Date-span filter — a calendar range picker narrowing the pyramid + sessions. */}
+      <div className="mb-3 flex items-center gap-1">
+        <Popover>
+          <PopoverTrigger render={<Button variant="outline" size="sm" className="gap-2 font-normal" />}>
+            <CalendarIcon className="size-4 text-muted-foreground" aria-hidden />
+            {dateRange?.from
+              ? dateRange.to && dateRange.to.getTime() !== dateRange.from.getTime()
+                ? `${rangeLabelFormatter.format(dateRange.from)} – ${rangeLabelFormatter.format(dateRange.to)}`
+                : rangeLabelFormatter.format(dateRange.from)
+              : 'All dates'}
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-auto p-0">
+            <Calendar
+              mode="range"
+              selected={dateRange}
+              onSelect={setDateRange}
+              defaultMonth={dateRange?.from}
+              disabled={{ after: new Date() }}
+            />
+          </PopoverContent>
+        </Popover>
+        {dateRange?.from && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Clear date filter"
+            onClick={() => setDateRange(undefined)}
+          >
+            <X className="size-4" />
+          </Button>
+        )}
+      </div>
+
       {hasSends && (
         <section className="mb-4 rounded-lg border border-border p-3">
-          <GradePyramid ascents={boardAscents} />
+          <GradePyramid ascents={filteredAscents} />
         </section>
+      )}
+
+      {daySessions.length === 0 && (
+        <EmptyState
+          title="No ascents in this date range"
+          body="Adjust or clear the date filter to see more of your history."
+        />
       )}
 
       <div className="space-y-4">
